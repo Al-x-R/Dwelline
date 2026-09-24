@@ -144,3 +144,34 @@ export function findExitDeadline(trips: Trip[], zoneId: string, today: string = 
     }
     return null;
 }
+
+export function findMaxStayFromDate(
+    trips: Trip[],
+    zoneId: string,
+    startDate: string
+): { date: string; days: number } | null {
+    let cursor = dayjs(startDate);
+    let lastSafeDate: string | null = null;
+    let daysCount = 0;
+
+    for (let i = 0; i < 400; i++) {
+        const dateStr = cursor.format('YYYY-MM-DD');
+        const hypotheticalTrip: Trip = {
+            id: '__hypothetical__',
+            zoneId: zoneId as Trip['zoneId'],
+            countryCode: 'XX',
+            entryDate: startDate,
+            exitDate: dateStr,
+        };
+        const presence = buildPresenceSet([...trips, hypotheticalTrip], zoneId, dateStr);
+        const daysUsed = countDaysInWindow(presence, dateStr);
+
+        if (daysUsed > MAX_STAY) break;
+
+        lastSafeDate = dateStr;
+        daysCount = i + 1;
+        cursor = cursor.add(1, 'day');
+    }
+
+    return lastSafeDate ? { date: lastSafeDate, days: daysCount } : null;
+}

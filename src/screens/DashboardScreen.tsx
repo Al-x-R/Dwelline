@@ -92,7 +92,7 @@ export default function DashboardScreen() {
             {/* FAB */}
             <TouchableOpacity
                 style={styles.fab}
-                onPress={() => navigation.navigate('AddTrip')}
+                onPress={() => navigation.navigate('Forecast')}
             >
                 <Ionicons name="add" size={28} color="#FFFFFF" />
             </TouchableOpacity>
