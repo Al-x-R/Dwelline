@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, FlatList } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -9,6 +9,7 @@ import dayjs from 'dayjs';
 
 import { useTripsStore } from '../store/tripsStore';
 import { simulateTrip, findMaxStayFromDate } from '../core/schengenCalculator';
+import { SCHENGEN_COUNTRIES, type Country } from '../constants/countries';
 
 const MAX_DURATION = 150; // намеренно больше 90 — иначе ползунок физически не может показать красную зону
 const MAX_VISIBLE_WEEKS = 4; // ограничиваем сетку календаря, чтобы не засорять экран при больших длительностях
@@ -16,12 +17,16 @@ const MAX_VISIBLE_WEEKS = 4; // ограничиваем сетку календ
 export default function ForecastScreen() {
     const navigation = useNavigation<any>();
     const trips = useTripsStore((s) => s.trips);
+    const addTrip = useTripsStore((s) => s.addTrip);
     const insets = useSafeAreaInsets();
 
+    const [country, setCountry] = useState<Country | null>(null);
     const [startDate, setStartDate] = useState<Date>(dayjs().add(7, 'day').toDate());
     const [duration, setDuration] = useState(7);
     const [datePickerVisible, setDatePickerVisible] = useState(false);
     const [fullCalendarVisible, setFullCalendarVisible] = useState(false);
+    const [countryModalVisible, setCountryModalVisible] = useState(false);
+    const [saved, setSaved] = useState(false);
 
     const simulation = useMemo(() => {
         return simulateTrip(trips, 'schengen', dayjs(startDate).format('YYYY-MM-DD'), duration);
@@ -72,6 +77,22 @@ export default function ForecastScreen() {
         return `${formatMonthRu(first.toDate())} – ${formatMonthRu(last.toDate())}`;
     }, [startDate, duration]);
 
+    const handleSaveAsPlan = async () => {
+        if (!country) {
+            setCountryModalVisible(true);
+            return;
+        }
+        const exitDate = dayjs(startDate).add(duration - 1, 'day').format('YYYY-MM-DD');
+        await addTrip({
+            zoneId: 'schengen',
+            countryCode: country.code,
+            entryDate: dayjs(startDate).format('YYYY-MM-DD'),
+            exitDate,
+        });
+        setSaved(true);
+        setTimeout(() => navigation.goBack(), 700);
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
@@ -86,6 +107,20 @@ export default function ForecastScreen() {
                 <Text style={styles.subtitle}>Рассчитай допустимый срок пребывания по правилу 90/180</Text>
 
                 <View style={styles.card}>
+                    <View style={styles.row}>
+                        <Text style={styles.label}>Страна:</Text>
+                        <TouchableOpacity style={styles.dateButton} onPress={() => setCountryModalVisible(true)}>
+                            {country ? (
+                                <Text style={styles.dateButtonText}>{country.flag} {country.name}</Text>
+                            ) : (
+                                <>
+                                    <Ionicons name="flag-outline" size={16} color="#6B7280" />
+                                    <Text style={styles.dateButtonPlaceholder}>Выбрать</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+
                     <View style={styles.row}>
                         <Text style={styles.label}>Дата начала:</Text>
                         <TouchableOpacity style={styles.dateButton} onPress={() => setDatePickerVisible(true)}>
@@ -172,9 +207,42 @@ export default function ForecastScreen() {
                 )}
             </ScrollView>
 
-            <TouchableOpacity style={styles.saveButton}>
-                <Text style={styles.saveButtonText}>Сохранить как план</Text>
+            <TouchableOpacity
+                style={[styles.saveButton, saved && styles.saveButtonSaved]}
+                onPress={handleSaveAsPlan}
+                disabled={saved}
+            >
+                <Text style={styles.saveButtonText}>{saved ? '✓ Сохранено' : 'Сохранить как план'}</Text>
             </TouchableOpacity>
+
+            {/* Модалка выбора страны */}
+            <Modal visible={countryModalVisible} animationType="slide" transparent>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Выбери страну</Text>
+                        <FlatList
+                            data={SCHENGEN_COUNTRIES}
+                            keyExtractor={(item) => item.code}
+                            style={{ maxHeight: 400 }}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={styles.countryRow}
+                                    onPress={() => {
+                                        setCountry(item);
+                                        setCountryModalVisible(false);
+                                    }}
+                                >
+                                    <Text style={styles.countryFlag}>{item.flag}</Text>
+                                    <Text style={styles.countryName}>{item.name}</Text>
+                                </TouchableOpacity>
+                            )}
+                        />
+                        <TouchableOpacity style={styles.modalClose} onPress={() => setCountryModalVisible(false)}>
+                            <Text style={styles.modalCloseText}>Закрыть</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
 
             {/* Date picker для даты начала поездки */}
             <Modal visible={datePickerVisible} animationType="slide" transparent>
@@ -314,6 +382,7 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
     },
     dateButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600', marginLeft: 8 },
+    dateButtonPlaceholder: { color: '#6B7280', fontSize: 14, fontWeight: '600', marginLeft: 8 },
     durationBadge: {
         backgroundColor: '#161616',
         borderRadius: 10,
@@ -386,6 +455,7 @@ const styles = StyleSheet.create({
         marginHorizontal: 20,
         marginBottom: 16,
     },
+    saveButtonSaved: { backgroundColor: '#22C55E' },
     saveButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
     modalOverlay: { flex: 1, backgroundColor: '#000000AA', justifyContent: 'flex-end' },
     modalContent: {
@@ -398,6 +468,9 @@ const styles = StyleSheet.create({
     datePickerWrapper: { backgroundColor: '#0F0F0F', borderRadius: 14, overflow: 'hidden' },
     modalClose: { alignItems: 'center', paddingVertical: 16, marginTop: 8 },
     modalCloseText: { color: '#3B82F6', fontSize: 15, fontWeight: '600' },
+    countryRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
+    countryFlag: { fontSize: 24, marginRight: 12 },
+    countryName: { color: '#FFFFFF', fontSize: 16 },
     expandRow: { marginTop: 8, alignItems: 'center' },
     expandLink: { color: '#3B82F6', fontSize: 13, fontWeight: '600', marginTop: 4 },
     fullCalendarContainer: { flex: 1, backgroundColor: '#0A0A0A' },

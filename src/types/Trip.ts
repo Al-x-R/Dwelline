@@ -1,4 +1,4 @@
-export type ZoneId = 'schengen' | 'uk' | 'cyprus';
+export type ZoneId = string;
 
 export interface Trip {
     id: string;
