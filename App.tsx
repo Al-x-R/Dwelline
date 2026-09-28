@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 
 import { useTripsStore } from './src/store/tripsStore';
+import { useZonesStore } from './src/store/zonesStore';
 
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -15,6 +16,7 @@ import CalendarScreen from './src/screens/CalendarScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
 import AddTripScreen from './src/screens/AddTripScreen';
+import AddZoneScreen from './src/screens/AddZoneScreen';
 
 import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
@@ -23,8 +25,9 @@ dayjs.locale('ru');
 export type RootStackParamList = {
     Onboarding: undefined;
     MainTabs: undefined;
-    Forecast: undefined;
-    AddTrip: { zoneId?: 'schengen' | 'uk' | 'cyprus'; onDone?: () => void };
+    Forecast: { zoneId?: string };
+    AddTrip: { zoneId?: string; onDone?: () => void };
+    AddZone: undefined;
 };
 
 export type MainTabsParamList = {
@@ -79,14 +82,16 @@ function MainTabs() {
 }
 
 export default function App() {
-    const { loadTrips, isLoaded } = useTripsStore();
+    const { loadTrips, isLoaded: tripsLoaded } = useTripsStore();
+    const { loadZones, isLoaded: zonesLoaded } = useZonesStore();
 
     useEffect(() => {
         loadTrips();
+        loadZones();
     }, []);
 
-    if (!isLoaded) {
-        return null; // тут позже можно поставить сплэш-экран
+    if (!tripsLoaded || !zonesLoaded) {
+        return null;
     }
 
     return (
@@ -94,7 +99,7 @@ export default function App() {
             <StatusBar style="light" />
             <RootStack.Navigator
                 screenOptions={{ headerShown: false }}
-                initialRouteName="MainTabs" // ВРЕМЕННО для теста дашборда, вернуть на "Onboarding" позже
+                initialRouteName="MainTabs"
             >
                 <RootStack.Screen name="Onboarding" component={OnboardingScreen} />
                 <RootStack.Screen name="MainTabs" component={MainTabs} />
@@ -106,6 +111,11 @@ export default function App() {
                 <RootStack.Screen
                     name="AddTrip"
                     component={AddTripScreen}
+                    options={{ presentation: 'modal' }}
+                />
+                <RootStack.Screen
+                    name="AddZone"
+                    component={AddZoneScreen}
                     options={{ presentation: 'modal' }}
                 />
             </RootStack.Navigator>

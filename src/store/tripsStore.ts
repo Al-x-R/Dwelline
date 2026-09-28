@@ -1,8 +1,8 @@
-// src/store/tripsStore.ts
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Trip, ZoneId } from '../types/Trip';
-import { calculateCompliance, findExitDeadline } from '../core/schengenCalculator';
+import { calculateCompliance, findExitDeadline, findMaxStayFromDate } from '../core/schengenCalculator';
+import { useZonesStore } from './zonesStore';
 
 const STORAGE_KEY = '@dwelline/trips';
 
@@ -15,9 +15,9 @@ interface TripsState {
     updateTrip: (id: string, updates: Partial<Trip>) => Promise<void>;
     deleteTrip: (id: string) => Promise<void>;
 
-    // Computed getters — a wrapper around the core engine
     getCompliance: (zoneId: ZoneId) => ReturnType<typeof calculateCompliance>;
     getExitDeadline: (zoneId: ZoneId) => string | null;
+    addTrips: (trips: Omit<Trip, 'id'>[]) => Promise<void>;
 }
 
 async function persist(trips: Trip[]) {
@@ -59,10 +59,26 @@ export const useTripsStore = create<TripsState>((set, get) => ({
     },
 
     getCompliance: (zoneId) => {
-        return calculateCompliance(get().trips, zoneId);
+        const zone = useZonesStore.getState().getZone(zoneId);
+        const windowSizeDays = zone?.windowSizeDays ?? 180;
+        const maxStayDays = zone?.maxStayDays ?? 90;
+        return calculateCompliance(get().trips, zoneId, undefined, windowSizeDays, maxStayDays);
     },
 
     getExitDeadline: (zoneId) => {
-        return findExitDeadline(get().trips, zoneId);
+        const zone = useZonesStore.getState().getZone(zoneId);
+        const windowSizeDays = zone?.windowSizeDays ?? 180;
+        const maxStayDays = zone?.maxStayDays ?? 90;
+        return findExitDeadline(get().trips, zoneId, undefined, windowSizeDays, maxStayDays);
+    },
+
+    addTrips: async (tripsData) => {
+        const newTrips: Trip[] = tripsData.map((t) => ({
+            ...t,
+            id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        }));
+        const updated = [...get().trips, ...newTrips];
+        set({ trips: updated });
+        await persist(updated);
     },
 }));
