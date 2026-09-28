@@ -18,6 +18,7 @@ interface TripsState {
     getCompliance: (zoneId: ZoneId) => ReturnType<typeof calculateCompliance>;
     getExitDeadline: (zoneId: ZoneId) => string | null;
     addTrips: (trips: Omit<Trip, 'id'>[]) => Promise<void>;
+    clearTrips: () => Promise<void>;
 }
 
 async function persist(trips: Trip[]) {
@@ -80,5 +81,10 @@ export const useTripsStore = create<TripsState>((set, get) => ({
         const updated = [...get().trips, ...newTrips];
         set({ trips: updated });
         await persist(updated);
+    },
+
+    clearTrips: async () => {
+        set({ trips: [] });
+        await AsyncStorage.removeItem(STORAGE_KEY);
     },
 }));

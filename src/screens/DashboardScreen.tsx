@@ -1,15 +1,16 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { ActionSheetIOS, Platform, Alert } from 'react-native';
 import dayjs from 'dayjs';
 
 import { useTripsStore } from '../store/tripsStore';
+import { useZonesStore } from '../store/zonesStore';
+import { BUILT_IN_ZONES } from '../constants/zones';
 import ProgressRing from '../components/ProgressRing';
 import TripListItem from '../components/TripListItem';
-
-const MAX_DAYS = 90;
 
 export default function DashboardScreen() {
     const navigation = useNavigation<any>();
@@ -17,17 +18,64 @@ export default function DashboardScreen() {
     const getCompliance = useTripsStore((s) => s.getCompliance);
     const getExitDeadline = useTripsStore((s) => s.getExitDeadline);
 
-    const compliance = useMemo(() => getCompliance('schengen'), [trips]);
-    const exitDeadline = useMemo(() => getExitDeadline('schengen'), [trips]);
+    const customZones = useZonesStore((s) => s.customZones);
+    const activeZoneIds = useZonesStore((s) => s.activeZoneIds);
+    const setActiveZoneIds = useZonesStore((s) => s.setActiveZoneIds);
+
+    const allZones = useMemo(() => {
+        return [...BUILT_IN_ZONES, ...customZones];
+    }, [customZones]);
+
+    const [selectedZoneId, setSelectedZoneId] = useState(activeZoneIds[0] ?? 'schengen');
+    const [zoneModalVisible, setZoneModalVisible] = useState(false);
+
+    const selectedZone = allZones.find((z) => z.id === selectedZoneId);
+    const maxDays = selectedZone?.maxStayDays ?? 90;
+
+    const compliance = useMemo(() => getCompliance(selectedZoneId), [trips, selectedZoneId]);
+    const exitDeadline = useMemo(() => getExitDeadline(selectedZoneId), [trips, selectedZoneId]);
 
     const recentTrips = useMemo(() => {
         return [...trips]
-            .filter((t) => t.zoneId === 'schengen')
+            .filter((t) => t.zoneId === selectedZoneId)
             .sort((a, b) => dayjs(b.entryDate).valueOf() - dayjs(a.entryDate).valueOf())
             .slice(0, 2);
-    }, [trips]);
+    }, [trips, selectedZoneId]);
 
-    const statusInfo = getStatusInfo(compliance.daysUsed, MAX_DAYS, compliance.isViolation);
+    const statusInfo = getStatusInfo(compliance.daysUsed, maxDays, compliance.isViolation);
+
+    const handleSelectZone = async (zoneId: string) => {
+        setSelectedZoneId(zoneId);
+        if (!activeZoneIds.includes(zoneId)) {
+            await setActiveZoneIds([...activeZoneIds, zoneId]);
+        }
+        setZoneModalVisible(false);
+    };
+
+    const handleFabPress = () => {
+        if (Platform.OS === 'ios') {
+            ActionSheetIOS.showActionSheetWithOptions(
+                {
+                    title: 'Что добавить?',
+                    options: ['Отмена', 'Добавить прошлую поездку', 'Запланировать поездку'],
+                    cancelButtonIndex: 0,
+                    userInterfaceStyle: 'dark',
+                },
+                (buttonIndex) => {
+                    if (buttonIndex === 1) navigation.navigate('AddTrip', { zoneId: selectedZoneId });
+                    if (buttonIndex === 2) navigation.navigate('Forecast', { zoneId: selectedZoneId });
+                }
+            );
+        } else {
+            Alert.alert('Что добавить?', undefined, [
+                { text: 'Прошлую поездку', onPress: () => navigation.navigate('AddTrip', { zoneId: selectedZoneId }) },
+                { text: 'Запланировать поездку', onPress: () => navigation.navigate('Forecast', { zoneId: selectedZoneId }) },
+                { text: 'Отмена', style: 'cancel' },
+            ]);
+        }
+    };
+
+    const clearTrips = useTripsStore((s) => s.clearTrips);
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -37,17 +85,29 @@ export default function DashboardScreen() {
                     <TouchableOpacity style={styles.iconButton}>
                         <Ionicons name="menu" size={22} color="#FFFFFF" />
                     </TouchableOpacity>
-                    <View style={styles.zoneBadge}>
-                        <Text style={styles.zoneBadgeText}>🇪🇺 Шенгенская зона</Text>
-                    </View>
-                    <TouchableOpacity style={styles.iconButton}>
+                    <TouchableOpacity style={styles.zoneBadge} onPress={() => setZoneModalVisible(true)}>
+                        <Text style={styles.zoneBadgeText}>
+                            {selectedZone?.flag} {selectedZone?.name ?? 'Выбери зону'}
+                        </Text>
+                        <Ionicons name="chevron-down" size={16} color="#9CA3AF" style={{ marginLeft: 6 }} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.iconButton}
+                        onLongPress={() => {
+                            if (!__DEV__) return;
+                            Alert.alert('Сбросить данные?', 'Удалит все поездки (только для разработки)', [
+                                { text: 'Отмена', style: 'cancel' },
+                                { text: 'Сбросить', style: 'destructive', onPress: () => clearTrips() },
+                            ]);
+                        }}
+                    >
                         <Ionicons name="settings-outline" size={22} color="#FFFFFF" />
                     </TouchableOpacity>
                 </View>
 
                 {/* Progress Ring */}
                 <View style={styles.ringWrapper}>
-                    <ProgressRing daysUsed={compliance.daysUsed} maxDays={MAX_DAYS} />
+                    <ProgressRing daysUsed={compliance.daysUsed} maxDays={maxDays} />
                 </View>
 
                 {/* Status card */}
@@ -90,12 +150,50 @@ export default function DashboardScreen() {
             </ScrollView>
 
             {/* FAB */}
-            <TouchableOpacity
-                style={styles.fab}
-                onPress={() => navigation.navigate('Forecast')}
-            >
+            <TouchableOpacity style={styles.fab} onPress={handleFabPress}>
                 <Ionicons name="add" size={28} color="#FFFFFF" />
             </TouchableOpacity>
+
+            {/* Модалка выбора зоны */}
+            <Modal visible={zoneModalVisible} animationType="slide" transparent>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Выбери зону</Text>
+                        <FlatList
+                            data={allZones.filter((z) => z.isImplemented)}
+                            keyExtractor={(item) => item.id}
+                            style={{ maxHeight: 400 }}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity style={styles.zoneRow} onPress={() => handleSelectZone(item.id)}>
+                                    <Text style={styles.zoneFlag}>{item.flag}</Text>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.zoneName}>{item.name}</Text>
+                                        {item.isCustom && <Text style={styles.zoneCustomLabel}>Своя зона</Text>}
+                                    </View>
+                                    {item.id === selectedZoneId && (
+                                        <Ionicons name="checkmark-circle" size={22} color="#3B82F6" />
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                            ListFooterComponent={
+                                <TouchableOpacity
+                                    style={styles.addZoneRow}
+                                    onPress={() => {
+                                        setZoneModalVisible(false);
+                                        navigation.navigate('AddZone');
+                                    }}
+                                >
+                                    <Ionicons name="add-circle-outline" size={22} color="#3B82F6" />
+                                    <Text style={styles.addZoneText}>Добавить свою зону</Text>
+                                </TouchableOpacity>
+                            }
+                        />
+                        <TouchableOpacity style={styles.modalClose} onPress={() => setZoneModalVisible(false)}>
+                            <Text style={styles.modalCloseText}>Закрыть</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -140,6 +238,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center', alignItems: 'center',
     },
     zoneBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: '#161616',
         paddingHorizontal: 16, paddingVertical: 8,
         borderRadius: 20,
@@ -192,4 +292,27 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 4 },
         elevation: 8,
     },
+    modalOverlay: { flex: 1, backgroundColor: '#000000AA', justifyContent: 'flex-end' },
+    modalContent: {
+        backgroundColor: '#0F0F0F',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+    },
+    modalTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', marginBottom: 16 },
+    modalClose: { alignItems: 'center', paddingVertical: 16, marginTop: 8 },
+    modalCloseText: { color: '#3B82F6', fontSize: 15, fontWeight: '600' },
+    zoneRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
+    zoneFlag: { fontSize: 24, marginRight: 12 },
+    zoneName: { color: '#FFFFFF', fontSize: 16 },
+    zoneCustomLabel: { color: '#6B7280', fontSize: 12, marginTop: 2 },
+    addZoneRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 16,
+        marginTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#1F1F1F',
+    },
+    addZoneText: { color: '#3B82F6', fontSize: 15, fontWeight: '600', marginLeft: 10 },
 });

@@ -1,16 +1,24 @@
-// src/components/TripListItem.tsx
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import dayjs from 'dayjs';
 import type { Trip } from '../types/Trip';
-import { findCountry } from '../constants/countries';
+import { findCountryOption } from '../constants/allCountries';
 
 interface Props {
     trip: Trip;
 }
 
+function daysWord(n: number): string {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 14) return 'дней';
+    if (mod10 === 1) return 'день';
+    if (mod10 >= 2 && mod10 <= 4) return 'дня';
+    return 'дней';
+}
+
 export default function TripListItem({ trip }: Props) {
-    const country = findCountry(trip.countryCode);
+    const country = findCountryOption(trip.countryCode);
     const entry = dayjs(trip.entryDate);
     const exit = trip.exitDate ? dayjs(trip.exitDate) : dayjs();
     const days = exit.diff(entry, 'day') + 1;
@@ -25,7 +33,7 @@ export default function TripListItem({ trip }: Props) {
                 </Text>
             </View>
             <View style={styles.badge}>
-                <Text style={styles.badgeText}>{days} {days === 1 ? 'день' : 'дней'}</Text>
+                <Text style={styles.badgeText}>{days} {daysWord(days)}</Text>
             </View>
         </View>
     );
