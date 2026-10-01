@@ -73,10 +73,10 @@ export const useTripsStore = create<TripsState>((set, get) => ({
         return findExitDeadline(get().trips, zoneId, undefined, windowSizeDays, maxStayDays);
     },
 
-    addTrips: async (tripsData) => {
+    addTrips: async (tripsData: (Omit<Trip, 'id'> & { id?: string })[]) => {
         const newTrips: Trip[] = tripsData.map((t) => ({
             ...t,
-            id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            id: t.id ?? `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         }));
         const updated = [...get().trips, ...newTrips];
         set({ trips: updated });

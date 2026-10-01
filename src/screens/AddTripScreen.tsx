@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -8,6 +8,7 @@ import {
     FlatList,
     ScrollView,
     Alert,
+    TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,9 +17,11 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import dayjs from 'dayjs';
 
 import { useTripsStore } from '../store/tripsStore';
+import { useJourneysStore } from '../store/journeysStore';
 import { ALL_COUNTRIES, type CountryOption } from '../constants/allCountries';
 import { BUILT_IN_ZONES } from '../constants/zones';
 import type { Trip } from '../types/Trip';
+import WorldCountryPickerModal, { type PickedCountry } from '../components/WorldCountryPickerModal';
 
 interface RoutePoint {
     id: string;
@@ -43,26 +46,44 @@ export default function AddTripScreen() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
     const addTrips = useTripsStore((s) => s.addTrips);
+    const addJourney = useJourneysStore((s) => s.addJourney);
     const onDone: (() => void) | undefined = route.params?.onDone;
+
+    const [originCountry, setOriginCountry] = useState<PickedCountry | null>(null);
+    const [originModalVisible, setOriginModalVisible] = useState(false);
+
+    const [destinationCountry, setDestinationCountry] = useState<PickedCountry | null>(null);
+    const [destinationModalVisible, setDestinationModalVisible] = useState(false);
+
+    const [journeyName, setJourneyName] = useState('');
+    const [nameEditedManually, setNameEditedManually] = useState(false);
 
     const [points, setPoints] = useState<RoutePoint[]>([makeEmptyPoint()]);
     const [returnStartIndex, setReturnStartIndex] = useState<number | null>(null);
 
     const [countryModalIndex, setCountryModalIndex] = useState<number | null>(null);
-    // индекс точки; -1 = финальная дата выезда; null = модалка закрыта
     const [dateModalIndex, setDateModalIndex] = useState<number | null>(null);
-    // черновик даты: всегда равен тому, что подсвечено в календаре
     const [draftDate, setDraftDate] = useState<Date>(new Date());
     const [zoneFilter, setZoneFilter] = useState<string>('all');
     const [saved, setSaved] = useState(false);
 
     const [finalExitDate, setFinalExitDate] = useState<Date | null>(null);
-    const [showFinalExitField, setShowFinalExitField] = useState(false);
 
     const implementedZones = BUILT_IN_ZONES.filter((z) => z.isImplemented);
 
     const filteredCountries =
         zoneFilter === 'all' ? ALL_COUNTRIES : ALL_COUNTRIES.filter((c) => c.zoneId === zoneFilter);
+
+    useEffect(() => {
+        if (nameEditedManually) return;
+        const from = originCountry?.name ?? points[0]?.country?.name;
+        const to = destinationCountry?.name ?? points[points.length - 1]?.country?.name;
+        if (from && to && from !== to) {
+            setJourneyName(`${from} — ${to}`);
+        } else if (to) {
+            setJourneyName(to);
+        }
+    }, [originCountry, destinationCountry, points, nameEditedManually]);
 
     const updatePoint = (index: number, updates: Partial<RoutePoint>) => {
         setPoints((prev) => prev.map((p, i) => (i === index ? { ...p, ...updates } : p)));
@@ -115,7 +136,7 @@ export default function AddTripScreen() {
         return toStartOfDay(points[dateModalIndex - 1].date);
     };
 
-    const buildTripsFromPoints = (): Omit<Trip, 'id'>[] => {
+    const buildTripsFromPoints = (): Trip[] => {
         return points.map((point, index) => {
             const isLast = index === points.length - 1;
             const exitDate = isLast
@@ -125,6 +146,7 @@ export default function AddTripScreen() {
                 : dayjs(points[index + 1].date).format('YYYY-MM-DD');
 
             return {
+                id: makeId(),
                 zoneId: point.country!.zoneId,
                 countryCode: point.country!.code,
                 entryDate: dayjs(point.date).format('YYYY-MM-DD'),
@@ -140,13 +162,21 @@ export default function AddTripScreen() {
         if (finalExitDate && lastPointDate && dayjs(finalExitDate).isBefore(dayjs(lastPointDate), 'day')) {
             Alert.alert(
                 'Некорректная дата',
-                'Дата окончательного выезда не может быть раньше даты прибытия в последнюю точку.'
+                'Дата выезда не может быть раньше даты прибытия в последнюю точку.'
             );
             return;
         }
 
         const trips = buildTripsFromPoints();
         await addTrips(trips);
+
+        await addJourney({
+            name: journeyName.trim() || 'Поездка',
+            originCountryName: originCountry?.name ?? null,
+            originCountryFlag: originCountry?.flag ?? null,
+            tripIds: trips.map((t) => t.id),
+        });
+
         setSaved(true);
         setTimeout(() => {
             if (onDone) onDone();
@@ -185,6 +215,31 @@ export default function AddTripScreen() {
                 <Text style={styles.subtitle}>
                     Добавь все точки маршрута — приложение само посчитает дни по каждой зоне
                 </Text>
+
+                <Text style={styles.fieldLabel}>ОТКУДА СТАРТОВАЛ (НЕОБЯЗАТЕЛЬНО)</Text>
+                <TouchableOpacity style={styles.select} onPress={() => setOriginModalVisible(true)}>
+                    <Text style={originCountry ? styles.selectValue : styles.selectPlaceholder}>
+                        {originCountry ? `${originCountry.flag} ${originCountry.name}` : 'Не указано'}
+                    </Text>
+                    <Ionicons name="chevron-down" size={18} color="#6B7280" />
+                </TouchableOpacity>
+                {originCountry && (
+                    <TouchableOpacity onPress={() => setOriginCountry(null)}>
+                        <Text style={styles.clearText}>Убрать точку отправления</Text>
+                    </TouchableOpacity>
+                )}
+
+                <Text style={styles.fieldLabel}>НАЗВАНИЕ ПОЕЗДКИ</Text>
+                <TextInput
+                    style={styles.nameInput}
+                    value={journeyName}
+                    onChangeText={(text) => {
+                        setJourneyName(text);
+                        setNameEditedManually(true);
+                    }}
+                    placeholder="Например, Украина — Кипр"
+                    placeholderTextColor="#6B7280"
+                />
 
                 {points.some((p) => p.country) && (
                     <View style={styles.routeVisual}>
@@ -261,41 +316,50 @@ export default function AddTripScreen() {
                     </TouchableOpacity>
                 )}
 
-                {!showFinalExitField ? (
-                    <TouchableOpacity style={styles.finalExitToggle} onPress={() => setShowFinalExitField(true)}>
-                        <Ionicons name="exit-outline" size={16} color="#6B7280" />
-                        <Text style={styles.finalExitToggleText}>Указать дату окончательного выезда</Text>
-                    </TouchableOpacity>
-                ) : (
-                    <View style={styles.finalExitBlock}>
-                        <Text style={styles.fieldLabel}>
-                            ДАТА ВЫЕЗДА ИЗ {points[points.length - 1].country?.name?.toUpperCase() ?? 'ПОСЛЕДНЕЙ ТОЧКИ'}
-                        </Text>
-                        <Text style={styles.finalExitHint}>
-                            Заполни, если точно знаешь дату — например, летишь домой или в страну, которую пока
-                            не отслеживаешь
-                        </Text>
-                        <TouchableOpacity style={styles.select} onPress={() => openDatePicker(-1)}>
-                            <Text style={finalExitDate ? styles.selectValue : styles.selectPlaceholder}>
-                                {finalExitDate ? dayjs(finalExitDate).format('DD.MM.YYYY') : 'ДД.ММ.ГГГГ'}
-                            </Text>
-                            <Ionicons name="calendar-outline" size={18} color="#6B7280" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={() => {
-                                setFinalExitDate(null);
-                                setShowFinalExitField(false);
-                            }}
+                <Text style={styles.fieldLabel}>
+                    КУДА ВЫЕЗЖАЕШЬ ИЗ {points[points.length - 1].country?.name?.toUpperCase() ?? 'ПОСЛЕДНЕЙ ТОЧКИ'} (НЕОБЯЗАТЕЛЬНО)
+                </Text>
+                <Text style={styles.finalExitHint}>
+                    Заполни, если точно знаешь — например, летишь домой или в страну, которую пока не
+                    отслеживаешь. Это закроет последнюю точку маршрута этой датой.
+                </Text>
+
+                <View style={styles.pointRow}>
+                    <TouchableOpacity
+                        style={styles.pointCountrySelectWide}
+                        onPress={() => setDestinationModalVisible(true)}
+                    >
+                        <Text
+                            style={destinationCountry ? styles.selectValue : styles.selectPlaceholder}
+                            numberOfLines={1}
                         >
-                            <Text style={styles.clearDateText}>Убрать — оставить точку открытой</Text>
-                        </TouchableOpacity>
-                    </View>
+                            {destinationCountry ? `${destinationCountry.flag} ${destinationCountry.name}` : 'Место'}
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.pointDateSelect} onPress={() => openDatePicker(-1)}>
+                        <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+                        <Text style={finalExitDate ? styles.selectValueSmall : styles.selectPlaceholderSmall}>
+                            {finalExitDate ? dayjs(finalExitDate).format('DD.MM.YY') : 'Дата'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
+                {(destinationCountry || finalExitDate) && (
+                    <TouchableOpacity
+                        onPress={() => {
+                            setDestinationCountry(null);
+                            setFinalExitDate(null);
+                        }}
+                    >
+                        <Text style={styles.clearText}>Убрать — оставить точку открытой</Text>
+                    </TouchableOpacity>
                 )}
 
-                {!showFinalExitField && (
+                {!destinationCountry && !finalExitDate && (
                     <Text style={styles.openEndedHint}>
                         Последняя точка маршрута останется открытой («я всё ещё там»), пока не добавишь
-                        следующую поездку или не укажешь дату выезда выше.
+                        следующую поездку или не укажешь конечную точку выше.
                     </Text>
                 )}
             </ScrollView>
@@ -311,6 +375,18 @@ export default function AddTripScreen() {
             <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
                 <Text style={styles.skipText}>Пропустить →</Text>
             </TouchableOpacity>
+
+            <WorldCountryPickerModal
+                visible={originModalVisible}
+                onSelect={setOriginCountry}
+                onClose={() => setOriginModalVisible(false)}
+            />
+
+            <WorldCountryPickerModal
+                visible={destinationModalVisible}
+                onSelect={setDestinationCountry}
+                onClose={() => setDestinationModalVisible(false)}
+            />
 
             <Modal visible={countryModalIndex !== null} animationType="slide" transparent>
                 <View style={styles.modalOverlay}>
@@ -376,7 +452,7 @@ export default function AddTripScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>
-                            {dateModalIndex === -1 ? 'Дата окончательного выезда' : 'Дата прибытия'}
+                            {dateModalIndex === -1 ? 'Дата выезда' : 'Дата прибытия'}
                         </Text>
                         <View style={styles.datePickerWrapper}>
                             <DateTimePicker
@@ -413,7 +489,11 @@ const styles = StyleSheet.create({
     title: { color: '#FFFFFF', fontSize: 24, fontWeight: '700', marginTop: 16, textAlign: 'center' },
     subtitle: { color: '#6B7280', fontSize: 13, textAlign: 'center', marginTop: 6, marginBottom: 16 },
     fieldLabel: { color: '#6B7280', fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 8, marginTop: 4 },
-    routeVisual: { flexDirection: 'row', paddingVertical: 16, marginBottom: 8 },
+    nameInput: {
+        backgroundColor: '#161616', borderWidth: 1, borderColor: '#1F1F1F', borderRadius: 12,
+        paddingHorizontal: 14, paddingVertical: 14, color: '#FFFFFF', fontSize: 15, marginBottom: 4,
+    },
+    routeVisual: { flexDirection: 'row', paddingVertical: 16, marginTop: 12, marginBottom: 8 },
     routeVisualItem: { flex: 1, alignItems: 'center' },
     routeVisualNode: { flexDirection: 'row', alignItems: 'center', width: '100%' },
     routeVisualDot: {
@@ -436,6 +516,10 @@ const styles = StyleSheet.create({
         flex: 3, backgroundColor: '#161616', borderWidth: 1, borderColor: '#1F1F1F',
         borderRadius: 12, paddingHorizontal: 12, paddingVertical: 14, justifyContent: 'center',
     },
+    pointCountrySelectWide: {
+        flex: 3, backgroundColor: '#161616', borderWidth: 1, borderColor: '#1F1F1F',
+        borderRadius: 12, paddingHorizontal: 12, paddingVertical: 14, justifyContent: 'center',
+    },
     pointDateSelect: {
         flex: 2, flexDirection: 'row', alignItems: 'center', backgroundColor: '#161616',
         borderWidth: 1, borderColor: '#1F1F1F', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 14,
@@ -453,18 +537,12 @@ const styles = StyleSheet.create({
     addPointText: { color: '#3B82F6', fontSize: 15, fontWeight: '600', marginLeft: 8 },
     addReturnButton: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-        paddingVertical: 12, marginTop: 4,
+        paddingVertical: 12, marginTop: 4, marginBottom: 12,
     },
     addReturnText: { color: '#9CA3AF', fontSize: 14, fontWeight: '600', marginLeft: 8 },
     openEndedHint: { color: '#4B5563', fontSize: 12, textAlign: 'center', marginTop: 16, lineHeight: 17 },
-    finalExitToggle: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-        paddingVertical: 12, marginTop: 4,
-    },
-    finalExitToggleText: { color: '#6B7280', fontSize: 13, fontWeight: '600', marginLeft: 8 },
-    finalExitBlock: { backgroundColor: '#0F0F0F', borderRadius: 16, padding: 14, marginTop: 8 },
     finalExitHint: { color: '#6B7280', fontSize: 12, lineHeight: 16, marginBottom: 12 },
-    clearDateText: { color: '#3B82F6', fontSize: 13, marginTop: 10, textAlign: 'center' },
+    clearText: { color: '#3B82F6', fontSize: 13, marginTop: 8, textAlign: 'center' },
     saveButton: {
         flexDirection: 'row', backgroundColor: '#3B82F6', borderRadius: 16, paddingVertical: 16,
         alignItems: 'center', justifyContent: 'center', marginTop: 16,

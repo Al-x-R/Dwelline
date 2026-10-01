@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { useTripsStore } from './src/store/tripsStore';
 import { useZonesStore } from './src/store/zonesStore';
+import { useJourneysStore } from './src/store/journeysStore';
 
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -84,10 +85,12 @@ function MainTabs() {
 export default function App() {
     const { loadTrips, isLoaded: tripsLoaded } = useTripsStore();
     const { loadZones, isLoaded: zonesLoaded } = useZonesStore();
+    const { loadJourneys, isLoaded: journeysLoaded } = useJourneysStore();
 
     useEffect(() => {
         loadTrips();
         loadZones();
+        loadJourneys();
     }, []);
 
     if (!tripsLoaded || !zonesLoaded) {
