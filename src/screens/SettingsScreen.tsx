@@ -6,7 +6,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import appConfig from '../../app.json';
 import { radius, space, typography, fonts, type AppTheme } from '../constants/theme';
-import { countryCodeToFlag, countryName } from '../constants/countries';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useThemedStyles } from '../hooks/useThemedStyles';
 import { useZoneLabel, useZones } from '../hooks/useZones';
@@ -18,7 +17,6 @@ import { resetAllData } from '../store/actions';
 import { shareTripsCsv } from '../services/exportService';
 import { displayDateFormat } from '../utils/format';
 import { BottomSheet, Card, ConfirmDialog, ListRow, Screen, ScreenHeader, SectionHeader, Stepper, Toggle } from '../components/ui';
-import { CountryPickerSheet } from '../components/app/CountryPickerSheet';
 import { ThemeOptions } from '../components/app/ThemeOptions';
 import { ZoneToggleList } from '../components/app/ZoneToggleList';
 
@@ -36,10 +34,7 @@ export default function SettingsScreen({navigation}: Props) {
 
   const [themeSheet, setThemeSheet] = useState(false);
   const [zonesSheet, setZonesSheet] = useState(false);
-  const [countryTarget, setCountryTarget] = useState<'citizenship' | 'residence' | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
-
-  const countryValue = (code: string | null) => (code ? `${countryCodeToFlag(code)} ${countryName(code, lang)}` : t('common.notSet'));
 
   return (
     <Screen glow="primary">
@@ -89,20 +84,6 @@ export default function SettingsScreen({navigation}: Props) {
             subtitle={t('settings.themeHint')}
             value={t(`settings.theme.${s.themeMode}`)}
             onPress={() => setThemeSheet(true)}
-          />
-          <ListRow
-            icon="card-outline"
-            title={t('settings.citizenship')}
-            subtitle={t('settings.citizenshipHint')}
-            value={countryValue(s.citizenshipCode)}
-            onPress={() => setCountryTarget('citizenship')}
-          />
-          <ListRow
-            icon="id-card-outline"
-            title={t('settings.residence')}
-            subtitle={t('settings.residenceHint')}
-            value={countryValue(s.residenceCode)}
-            onPress={() => setCountryTarget('residence')}
             last
           />
         </Card>
@@ -227,14 +208,6 @@ export default function SettingsScreen({navigation}: Props) {
           <ZoneToggleList/>
         </ScrollView>
       </BottomSheet>
-
-      <CountryPickerSheet
-        visible={countryTarget !== null}
-        title={countryTarget === 'residence' ? t('settings.residence') : t('settings.citizenship')}
-        onSelect={(code) => (countryTarget === 'residence' ? s.setResidenceCode(code) : s.setCitizenshipCode(code))}
-        onClear={() => (countryTarget === 'residence' ? s.setResidenceCode(null) : s.setCitizenshipCode(null))}
-        onClose={() => setCountryTarget(null)}
-      />
 
       <ConfirmDialog
         visible={confirmReset}
