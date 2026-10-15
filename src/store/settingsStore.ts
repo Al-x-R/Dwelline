@@ -21,8 +21,6 @@ interface SettingsState {
   themeMode: ThemeMode;
 
   selectedZoneId: string;
-  citizenshipCode: string | null;
-  residenceCode: string | null;
   safetyBufferDays: number;
 
   overstayAlerts: boolean;
@@ -33,8 +31,6 @@ interface SettingsState {
   setRegional: (patch: { autoRegional?: boolean; dateFormat?: DateFormat; weekStart?: WeekStart }) => void;
   setThemeMode: (mode: ThemeMode) => void;
   setSelectedZoneId: (zoneId: string) => void;
-  setCitizenshipCode: (code: string | null) => void;
-  setResidenceCode: (code: string | null) => void;
   setSafetyBufferDays: (days: number) => void;
   setAlerts: (patch: { overstayAlerts?: boolean; rollOffAlerts?: boolean }) => void;
 }
@@ -69,8 +65,6 @@ export const useSettingsStore = create<SettingsState>()(
       themeMode: 'system',
 
       selectedZoneId: 'schengen',
-      citizenshipCode: null,
-      residenceCode: null,
       safetyBufferDays: 14,
 
       overstayAlerts: true,
@@ -92,8 +86,6 @@ export const useSettingsStore = create<SettingsState>()(
         set({themeMode});
       },
       setSelectedZoneId: (selectedZoneId) => set({selectedZoneId}),
-      setCitizenshipCode: (citizenshipCode) => set({citizenshipCode}),
-      setResidenceCode: (residenceCode) => set({residenceCode}),
       setSafetyBufferDays: (days) =>
         set({safetyBufferDays: Math.min(MAX_BUFFER_DAYS, Math.max(MIN_BUFFER_DAYS, days))}),
       setAlerts: (patch) => set((s) => ({...s, ...patch})),
@@ -102,6 +94,12 @@ export const useSettingsStore = create<SettingsState>()(
       name: '@dwelline/settings',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: ({hydrated: _hydrated, ...rest}) => rest,
+      version: 1,
+      // v1: dropped citizenshipCode / residenceCode.
+      migrate: (persisted) => {
+        const {citizenshipCode: _c, residenceCode: _r, ...rest} = persisted as Record<string, unknown>;
+        return rest as Partial<SettingsState>;
+      },
       onRehydrateStorage: () => (state) => {
         if (state) {
           applyThemeMode(state.themeMode);
