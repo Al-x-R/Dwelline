@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import dayjs from 'dayjs';
 
@@ -11,7 +11,6 @@ import { BottomSheet, Button, Pill } from '../ui';
 import { MonthGrid, type DayMarkers } from './MonthGrid';
 
 const ISO = 'YYYY-MM-DD';
-const QUICK_OFFSETS = [7, 14, 30];
 
 export interface DateImpact {
   ok: boolean;
@@ -55,42 +54,11 @@ function DatePickerBody({value, onConfirm, onClose, minDate, maxDate, rangeStart
   );
   const [month, setMonth] = useState(() => dayjs(draft).startOf('month'));
 
-  const base = rangeStart ?? dayjs().format(ISO);
-  const quick = [
-    {label: t('datePicker.today'), date: dayjs().format(ISO)},
-    ...QUICK_OFFSETS.map((n) => ({label: t('datePicker.plusDays', {count: n}), date: dayjs(base).add(n, 'day').format(ISO)})),
-  ].filter((q) => (!minDate || q.date >= minDate) && (!maxDate || q.date <= maxDate));
-
-  const pick = (date: string) => {
-    setDraft(date);
-    setMonth(dayjs(date).startOf('month'));
-  };
-
   const result = impact?.(draft) ?? null;
 
   return (
     <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
         {corridorLabel ? <Pill label={corridorLabel} tone="primary" style={styles.corridor}/> : null}
-
-        {quick.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
-            {quick.map((q) => {
-              const active = q.date === draft;
-              return (
-                <Pressable
-                  key={q.label}
-                  style={({pressed}) => [styles.chip, active && styles.chipActive, pressed && styles.pressed]}
-                  onPress={() => pick(q.date)}
-                  accessibilityRole="button"
-                  accessibilityState={{selected: active}}
-                >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{q.label}</Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        ) : null}
-
         <View style={styles.calendar}>
           <MonthGrid
             month={month}
@@ -145,15 +113,6 @@ function DatePickerBody({value, onConfirm, onClose, minDate, maxDate, rangeStart
 function createStyles({colors}: AppTheme) {
   return StyleSheet.create({
     corridor: {marginBottom: space.gutterSm},
-    quickRow: {gap: space.sm, paddingBottom: space.md},
-    chip: {
-      height: 36, paddingHorizontal: 14, borderRadius: radius.full, justifyContent: 'center',
-      backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border,
-    },
-    chipActive: {backgroundColor: colors.primarySoft, borderColor: colors.accentText},
-    chipText: {...typography.labelMd, fontSize: 13, color: colors.textBody},
-    chipTextActive: {color: colors.accentText, fontFamily: fonts.semibold},
-    pressed: {opacity: 0.7},
     calendar: {
       backgroundColor: colors.surfaceElevated, borderRadius: radius.xl, padding: space.md,
       borderWidth: 1, borderColor: colors.border,

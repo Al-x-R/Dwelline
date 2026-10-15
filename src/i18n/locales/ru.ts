@@ -261,8 +261,6 @@ const ru = {
   'countryPicker.clear': 'Не указывать',
 
   'datePicker.title': 'Выберите дату',
-  'datePicker.today': 'Сегодня',
-  'datePicker.plusDays': '+{count} дней',
   'datePicker.corridor': 'Коридор: {used} / {max} дн',
   'datePicker.withinNorm': 'В пределах нормы:',
   'datePicker.willRemain': 'останется {days} в зоне {zone}',

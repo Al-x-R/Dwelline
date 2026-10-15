@@ -254,8 +254,6 @@ const en: Record<TranslationKey, TranslationValue> = {
   'countryPicker.clear': 'Don’t specify',
 
   'datePicker.title': 'Choose a date',
-  'datePicker.today': 'Today',
-  'datePicker.plusDays': '+{count} days',
   'datePicker.corridor': 'Corridor: {used} / {max} d',
   'datePicker.withinNorm': 'Within limits:',
   'datePicker.willRemain': '{days} will remain in {zone}',

@@ -266,8 +266,6 @@ const uk: Record<TranslationKey, TranslationValue> = {
   'countryPicker.clear': 'Не вказувати',
 
   'datePicker.title': 'Оберіть дату',
-  'datePicker.today': 'Сьогодні',
-  'datePicker.plusDays': '+{count} днів',
   'datePicker.corridor': 'Коридор: {used} / {max} дн',
   'datePicker.withinNorm': 'У межах норми:',
   'datePicker.willRemain': 'залишиться {days} у зоні {zone}',
