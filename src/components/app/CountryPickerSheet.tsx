@@ -18,9 +18,11 @@ interface Props {
   onClose: () => void;
   // Show the "Not specified" option.
   onClear?: () => void;
+  // Restrict the list to these ISO codes.
+  allowedCodes?: string[];
 }
 
-export function CountryPickerSheet({visible, title, onSelect, onClose, onClear}: Props) {
+export function CountryPickerSheet({visible, title, onSelect, onClose, onClear, allowedCodes}: Props) {
   const theme = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const {t, lang} = useT();
@@ -36,6 +38,7 @@ export function CountryPickerSheet({visible, title, onSelect, onClose, onClear}:
     return COUNTRIES
       .map((c) => ({country: c, zoneId: zoneIdForCountry(c.code, allZones)}))
       .filter(({country, zoneId}) => {
+        if (allowedCodes && !allowedCodes.includes(country.code)) return false;
         if (zoneFilter && zoneId !== zoneFilter) return false;
         if (!q) return true;
         return Object.values(country.names).some((n) => n.toLowerCase().includes(q)) || country.code.toLowerCase() === q;
@@ -47,7 +50,7 @@ export function CountryPickerSheet({visible, title, onSelect, onClose, onClear}:
         if (at !== bt) return at - bt;
         return a.country.names[lang].localeCompare(b.country.names[lang], lang);
       });
-  }, [query, zoneFilter, allZones, lang]);
+  }, [query, zoneFilter, allZones, lang, allowedCodes]);
 
   const close = () => {
     setQuery('');

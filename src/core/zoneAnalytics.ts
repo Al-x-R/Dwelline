@@ -69,10 +69,10 @@ export function summarizeZone(
   trips: Trip[],
   zone: ZoneConfig | undefined,
   bufferDays: number,
-  today: string = todayIso()
+  today: string = todayIso(),
+  rules: ZoneRules = zoneRules(zone)
 ): ZoneSummary {
   const zoneId = zone?.id ?? '';
-  const rules = zoneRules(zone);
   const compliance = calculateCompliance(trips, zoneId, today, rules);
   const presence = buildPresenceSet(trips, zoneId, today);
 
@@ -150,10 +150,10 @@ export function simulateStay(
   trips: Trip[],
   zone: ZoneConfig | undefined,
   entryDate: string,
-  durationDays: number
+  durationDays: number,
+  rules: ZoneRules = zoneRules(zone)
 ): SimulationResult {
   const zoneId = zone?.id ?? '';
-  const rules = zoneRules(zone);
   const exitDate = dayjs(entryDate).add(durationDays - 1, 'day').format(ISO);
   const simulation = simulateTrip(trips, zoneId, entryDate, durationDays, rules);
   const maxStay = findMaxStayFromDate(trips, zoneId, entryDate, rules);

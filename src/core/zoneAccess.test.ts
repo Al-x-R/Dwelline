@@ -1,3 +1,4 @@
+import { PASSPORT_RULES } from '../constants/passportRules';
 import { BUILT_IN_ZONES, type ZoneConfig } from '../constants/zones';
 import type { Trip } from '../types/Trip';
 import { calculateCompliance, findExitDeadline } from './schengenCalculator';
@@ -71,6 +72,15 @@ describe('resolveZoneAccess', () => {
         expect(access.exemptions).toHaveLength(0);
     });
 
+    it('treats a national D visa like a residence permit in the issuing country', () => {
+        const access = resolveZoneAccess(zone('schengen'), {
+            passports: ['US'],
+            residences: [{countryCode: 'ES', kind: 'national_visa_d', validUntil: '2027-01-31'}],
+        }, '2026-10-15');
+        expect(access.mode).toBe('visa_free');
+        expect(access.exemptions).toEqual([{countryCode: 'ES', kind: 'national_visa_d', until: '2027-01-31'}]);
+    });
+
     it('stops treating a zone as free once the residence permit has expired', () => {
         const access = resolveZoneAccess(zone('georgia'), {
             passports: ['UA'],
@@ -98,6 +108,22 @@ describe('applyExemptions', () => {
     });
 });
 
+describe('applyExemptions with an open stay', () => {
+    const open: Trip[] = [
+        { id: '1', zoneId: 'schengen', countryCode: 'DE', entryDate: '2026-01-01', exitDate: null },
+    ];
+    const exemption = [{countryCode: 'DE', kind: 'temporary_protection' as const, until: '2027-03-04'}];
+
+    it('drops an open stay while the status is valid', () => {
+        expect(applyExemptions(open, exemption, '2026-10-15')).toHaveLength(0);
+    });
+
+    it('counts an open stay from the day after the status ended', () => {
+        const [trip] = applyExemptions(open, exemption, '2027-03-10');
+        expect(trip.entryDate).toBe('2027-03-05');
+    });
+});
+
 describe('month-based visit limit', () => {
     const uk = resolveZoneAccess(zone('uk'), {passports: ['US'], residences: []}).constraints[0];
 
@@ -108,5 +134,13 @@ describe('month-based visit limit', () => {
         // Jan 1 + 6 months = Jul 1, so the last allowed day is Jun 30 (181 days)
         expect(findExitDeadline(trips, 'uk', '2026-01-01', uk)).toBe('2026-06-30');
         expect(calculateCompliance(trips, 'uk', '2026-06-30', uk).daysRemaining).toBe(0);
+    });
+});
+
+describe('PASSPORT_RULES', () => {
+    it('has at most one constraint per cell until combined constraints are supported', () => {
+        for (const cells of Object.values(PASSPORT_RULES)) {
+            for (const cell of Object.values(cells)) expect(cell!.constraints.length).toBeLessThanOrEqual(1);
+        }
     });
 });

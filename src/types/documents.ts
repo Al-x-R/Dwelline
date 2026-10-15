@@ -16,7 +16,8 @@ export interface PassportRule {
 }
 
 // A status that lets the holder live in a country: days there don't count toward the zone limit.
-export type ResidenceKind = 'residence_permit' | 'temporary_protection';
+// national_visa_d: long-stay national visa of a Schengen/EU state — same effect as a residence permit there.
+export type ResidenceKind = 'residence_permit' | 'temporary_protection' | 'national_visa_d';
 
 export interface ResidenceDoc {
   countryCode: string;

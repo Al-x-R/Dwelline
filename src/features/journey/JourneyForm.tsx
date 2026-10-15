@@ -9,7 +9,7 @@ import { countryCodeToFlag, countryName } from '../../constants/countries';
 import { NO_ZONE } from '../../constants/zones';
 import type { Trip } from '../../types/Trip';
 import { buildPresenceSet } from '../../core/schengenCalculator';
-import { isPerVisit, todayIso, toneFor, tripDaysCount, windowUsage, zoneRules } from '../../core/zoneAnalytics';
+import { isPerVisit, todayIso, toneFor, tripDaysCount, windowUsage } from '../../core/zoneAnalytics';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useThemedStyles } from '../../hooks/useThemedStyles';
 import { useFormatters } from '../../hooks/useFormatters';
@@ -30,6 +30,8 @@ import { RouteStrip, type RouteNode } from './components/RouteStrip';
 import { PointCard } from './components/PointCard';
 import { ImpactCard, type ImpactRow } from './components/ImpactCard';
 import { TransportPicker } from './components/TransportPicker';
+import { zoneContext } from '../../core/zoneAccess';
+import { useTravelDocuments } from '../../hooks/useZoneContext';
 
 type CountryTarget = { kind: 'origin' } | { kind: 'destination' } | { kind: 'point'; index: number };
 type DateTarget = { kind: 'origin' } | { kind: 'arrival'; index: number } | { kind: 'exit' };
@@ -57,6 +59,7 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
   const zoneLabel = useZoneLabel();
   const allTrips = useTripsStore((s) => s.trips);
   const buffer = useSettingsStore((s) => s.safetyBufferDays);
+  const docs = useTravelDocuments();
   const {draft, update, updatePoint, addPoint, removePoint, setName, legs} = useJourneyDraft(initialDraft, lang);
 
   const [countryTarget, setCountryTarget] = useState<CountryTarget | null>(null);
@@ -84,11 +87,11 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
     if (draftTrips.length === 0) return null;
     const touched = Array.from(new Set(draftTrips.map((tr) => tr.zoneId).filter((z) => z !== NO_ZONE)));
     const zone = allZones.find((z) => z.id === (touched.includes(selectedZone.id) ? selectedZone.id : touched[0])) ?? selectedZone;
-    const rules = zoneRules(zone);
-    const combined = [...otherTrips, ...draftTrips];
+    const ctx = zoneContext(zone, [...otherTrips, ...draftTrips], docs);
+    const rules = ctx.rules;
     const last = draftTrips[draftTrips.length - 1];
     const end = last.exitDate ?? (last.entryDate > todayIso() ? last.entryDate : todayIso());
-    const presence = buildPresenceSet(combined, zone.id, todayIso());
+    const presence = buildPresenceSet(ctx.trips, zone.id, todayIso());
     const usage = windowUsage(presence, end, rules);
     const zoneDays = draftTrips.filter((tr) => tr.zoneId === zone.id);
     const lastInZone = zoneDays.length ? zoneDays[zoneDays.length - 1].exitDate ?? end : null;
@@ -118,16 +121,16 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
       windowReset: lastInZone && !isPerVisit(rules) ? fmt.dayMonth(dayjs(lastInZone).add(rules.windowSizeDays, 'day')) : null,
       rows,
     };
-  }, [draftTrips, otherTrips, allZones, selectedZone, zoneLabel, buffer, fmt, t, theme.colors.textMuted]);
+  }, [draftTrips, otherTrips, allZones, selectedZone, zoneLabel, buffer, docs, fmt, t, theme.colors.textMuted]);
 
   // Estimate for the departure date sheet: what's left in the last point's zone.
   const exitImpact = (date: string): DateImpact | null => {
     const lastPoint = draft.points[draft.points.length - 1];
     const zone = zoneOf(lastPoint.countryCode);
     if (!zone || !completePoints) return null;
-    const rules = zoneRules(zone);
-    const trips = buildTrips({...draft, exitDate: date}, allZones);
-    const presence = buildPresenceSet([...otherTrips, ...trips], zone.id, todayIso());
+    const ctx = zoneContext(zone, [...otherTrips, ...buildTrips({...draft, exitDate: date}, allZones)], docs);
+    const rules = ctx.rules;
+    const presence = buildPresenceSet(ctx.trips, zone.id, todayIso());
     const usage = windowUsage(presence, date, rules);
     return {
       ok: !usage.isViolation,
@@ -139,8 +142,9 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
   const corridorLabelFor = (code: string | null) => {
     const zone = zoneOf(code);
     if (!zone) return undefined;
-    const rules = zoneRules(zone);
-    const usage = windowUsage(buildPresenceSet(otherTrips, zone.id, todayIso()), todayIso(), rules);
+    const ctx = zoneContext(zone, otherTrips, docs);
+    const rules = ctx.rules;
+    const usage = windowUsage(buildPresenceSet(ctx.trips, zone.id, todayIso()), todayIso(), rules);
     return t('datePicker.corridor', {used: usage.daysUsed, max: rules.maxStayDays});
   };
 

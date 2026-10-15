@@ -1,11 +1,17 @@
 import dayjs from 'dayjs';
 
 import type { ZoneConfig } from '../constants/zones';
-import { PASSPORT_RULES, passportGroup, TEMPORARY_PROTECTION_CODES, TEMPORARY_PROTECTION_UNTIL } from '../constants/passportRules';
+import {
+  EU_EEA_CODES,
+  PASSPORT_RULES,
+  passportGroup,
+  TEMPORARY_PROTECTION_CODES,
+  TEMPORARY_PROTECTION_UNTIL,
+} from '../constants/passportRules';
 import type { AccessMode, Requirement, ResidenceDoc, ResidenceKind } from '../types/documents';
 import type { Trip } from '../types/Trip';
 import type { StayRules } from './schengenCalculator';
-import { todayIso, zoneRules } from './zoneAnalytics';
+import { todayIso, zoneRules, type ZoneRules } from './zoneAnalytics';
 
 // Days in this country don't count toward the zone limit (until the date, inclusive, if set).
 export interface Exemption {
@@ -81,6 +87,7 @@ function exemptionsFor(zone: ZoneConfig, residences: ResidenceDoc[]): Exemption[
       if (!TEMPORARY_PROTECTION_CODES.includes(doc.countryCode)) return [];
       return [{countryCode: doc.countryCode, kind: doc.kind, until: doc.validUntil ?? TEMPORARY_PROTECTION_UNTIL}];
     }
+    if (doc.kind === 'national_visa_d' && !EU_EEA_CODES.includes(doc.countryCode)) return [];
     return [{countryCode: doc.countryCode, kind: doc.kind, until: doc.validUntil}];
   });
 }
@@ -103,7 +110,7 @@ export function resolveZoneAccess(zone: ZoneConfig, docs: TravelDocuments, today
 }
 
 // Drops (or clips) trip days covered by an exemption, so the calculator never sees them.
-export function applyExemptions(trips: Trip[], exemptions: Exemption[]): Trip[] {
+export function applyExemptions(trips: Trip[], exemptions: Exemption[], today: string = todayIso()): Trip[] {
   if (!exemptions.length) return trips;
   return trips.flatMap((trip) => {
     const exemption = exemptions.find((e) => e.countryCode === trip.countryCode);
@@ -111,6 +118,23 @@ export function applyExemptions(trips: Trip[], exemptions: Exemption[]): Trip[] 
     if (exemption.until === null) return [];
     if (trip.entryDate > exemption.until) return [trip];
     if (trip.exitDate !== null && trip.exitDate <= exemption.until) return [];
+    // Still there and the status is valid: nothing counts yet, and a clipped open trip would look like a future one.
+    if (trip.exitDate === null && exemption.until >= today) return [];
     return [{...trip, entryDate: dayjs(exemption.until).add(1, 'day').format('YYYY-MM-DD')}];
   });
+}
+
+export interface ZoneContext {
+  access: ZoneAccess;
+  // Rule the calculator counts against.
+  rules: ZoneRules;
+  // Trips with exempt days removed.
+  trips: Trip[];
+}
+
+export function zoneContext(zone: ZoneConfig, trips: Trip[], docs: TravelDocuments, today: string = todayIso()): ZoneContext {
+  const access = resolveZoneAccess(zone, docs, today);
+  // Every table cell has a single constraint today (enforced by a test); combined ones need all of them evaluated.
+  const rules = access.constraints[0] ?? zoneRules(zone);
+  return {access, rules, trips: applyExemptions(trips, access.exemptions, today)};
 }

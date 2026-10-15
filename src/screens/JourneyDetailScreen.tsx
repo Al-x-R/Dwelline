@@ -8,7 +8,7 @@ import { radius, space, tabularNums, typography, fonts, type AppTheme } from '..
 import { countryCodeToFlag, countryName } from '../constants/countries';
 import { NO_ZONE } from '../constants/zones';
 import { calculateCompliance } from '../core/schengenCalculator';
-import { toneFor, tripDaysCount, zoneRules, type ZoneTone } from '../core/zoneAnalytics';
+import { toneFor, tripDaysCount, type ZoneTone } from '../core/zoneAnalytics';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useThemedStyles } from '../hooks/useThemedStyles';
 import { useFormatters } from '../hooks/useFormatters';
@@ -26,6 +26,8 @@ import { ZoneStatusCard } from '../features/zone/ZoneStatusCard';
 import {
   TRANSPORT_ICONS, daysByZone, journeyOrigin, journeyShortId, journeySpan, journeyState, journeyTrips,
 } from '../features/journey/journeyUtils';
+import { zoneContext } from '../core/zoneAccess';
+import { useTravelDocuments } from '../hooks/useZoneContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'JourneyDetail'>;
 
@@ -42,6 +44,7 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
   const journey = useJourneysStore((s) => s.getJourney(journeyId));
   const allTrips = useTripsStore((s) => s.trips);
   const buffer = useSettingsStore((s) => s.safetyBufferDays);
+  const docs = useTravelDocuments();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -55,11 +58,11 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
     return ids.flatMap((id) => {
       const zone = allZones.find((z) => z.id === id);
       if (!zone) return [];
-      const rules = zoneRules(zone);
-      const c = calculateCompliance(allTrips, id, undefined, rules);
-      const withoutJourney = calculateCompliance(
-        allTrips.filter((tr) => !journey?.tripIds.includes(tr.id)), id, undefined, rules
-      );
+      const ctx = zoneContext(zone, allTrips, docs);
+      const rules = ctx.rules;
+      const c = calculateCompliance(ctx.trips, id, undefined, rules);
+      const others = zoneContext(zone, allTrips.filter((tr) => !journey?.tripIds.includes(tr.id)), docs);
+      const withoutJourney = calculateCompliance(others.trips, id, undefined, rules);
       return [{
         zone,
         rules,
@@ -68,7 +71,7 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
         tone: toneFor(c.daysUsed, rules.maxStayDays, buffer),
       }];
     });
-  }, [zoneDays, allZones, allTrips, journey, buffer]);
+  }, [zoneDays, allZones, allTrips, journey, buffer, docs]);
 
   if (!journey) {
     return (

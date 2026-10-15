@@ -19,6 +19,7 @@ import { AppHeader } from '../components/app/AppHeader';
 import { FLOATING_CTA_SPACE } from '../components/app/TabBar';
 import { MonthGrid } from '../components/calendar/MonthGrid';
 import { Button, Card, Pill, ProgressBar, Screen, SectionHeader, toneColors } from '../components/ui';
+import { useZoneContext } from '../hooks/useZoneContext';
 
 export default function CalendarScreen() {
   const theme = useAppTheme();
@@ -36,7 +37,8 @@ export default function CalendarScreen() {
   const [month, setMonth] = useState(() => dayjs().startOf('month'));
   const [selected, setSelected] = useState(todayIso());
 
-  const presence = useMemo(() => presenceFor(trips, selectedZone.id), [trips, selectedZone.id]);
+  const ctx = useZoneContext(selectedZone);
+  const presence = useMemo(() => presenceFor(ctx.trips, selectedZone.id), [ctx.trips, selectedZone.id]);
   const markers = useCallback(
     (date: string) => dayInfo(presence, date, rules),
     [presence, rules]

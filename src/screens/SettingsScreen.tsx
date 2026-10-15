@@ -8,6 +8,7 @@ import appConfig from '../../app.json';
 import { radius, space, typography, fonts, type AppTheme } from '../constants/theme';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useThemedStyles } from '../hooks/useThemedStyles';
+import { useZoneContext } from '../hooks/useZoneContext';
 import { useZoneLabel, useZones } from '../hooks/useZones';
 import { useT } from '../i18n';
 import { LANGUAGE_NATIVE_NAMES } from '../i18n/types';
@@ -17,6 +18,7 @@ import { resetAllData } from '../store/actions';
 import { shareTripsCsv } from '../services/exportService';
 import { displayDateFormat } from '../utils/format';
 import { BottomSheet, Card, ConfirmDialog, ListRow, Screen, ScreenHeader, SectionHeader, Stepper, Toggle } from '../components/ui';
+import { DocumentsEditor } from '../components/app/DocumentsEditor';
 import { ThemeOptions } from '../components/app/ThemeOptions';
 import { ZoneToggleList } from '../components/app/ZoneToggleList';
 
@@ -31,6 +33,7 @@ export default function SettingsScreen({navigation}: Props) {
   const {selectedZone, activeZones} = useZones();
   const zoneLabel = useZoneLabel();
   const s = useSettingsStore();
+  const {rules} = useZoneContext(selectedZone);
 
   const [themeSheet, setThemeSheet] = useState(false);
   const [zonesSheet, setZonesSheet] = useState(false);
@@ -67,6 +70,11 @@ export default function SettingsScreen({navigation}: Props) {
           </LinearGradient>
         </Pressable>
 
+        <SectionHeader title={t('settings.documents')}/>
+        <Card padded={false} style={styles.group}>
+          <DocumentsEditor/>
+        </Card>
+
         <SectionHeader title={t('settings.localization')}/>
         <Card padded={false} style={styles.group}>
           <ListRow
@@ -93,10 +101,10 @@ export default function SettingsScreen({navigation}: Props) {
           <ListRow
             icon="calculator-outline"
             iconTone="safe"
-            title={t(selectedZone.ruleType === 'per_visit' ? 'settings.perVisit' : 'settings.window', {rule: zoneLabel.rule(selectedZone)})}
-            subtitle={selectedZone.ruleType === 'per_visit'
+            title={t(rules.kind === 'per_visit' ? 'settings.perVisit' : 'settings.window', {rule: zoneLabel.rule(selectedZone)})}
+            subtitle={rules.kind === 'per_visit'
               ? t('settings.perVisitHint')
-              : t('settings.windowHint', {window: selectedZone.windowSizeDays ?? 180})}
+              : t('settings.windowHint', {window: rules.windowSizeDays})}
           />
           <ListRow
             icon="time-outline"

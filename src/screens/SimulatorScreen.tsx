@@ -7,7 +7,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { radius, space, tabularNums, typography, fonts, type AppTheme } from '../constants/theme';
 import { countryCodeToFlag, countryName } from '../constants/countries';
-import { isPerVisit, simulateStay, todayIso, zoneRules } from '../core/zoneAnalytics';
+import { isPerVisit, simulateStay, todayIso } from '../core/zoneAnalytics';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useThemedStyles } from '../hooks/useThemedStyles';
 import { useFormatters } from '../hooks/useFormatters';
@@ -24,6 +24,7 @@ import {
 import { CountryPickerSheet } from '../components/app/CountryPickerSheet';
 import { DatePickerSheet } from '../components/calendar/DatePickerSheet';
 import { makeId } from '../features/journey/useJourneyDraft';
+import { useZoneContext } from '../hooks/useZoneContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Simulator'>;
 
@@ -38,7 +39,6 @@ export default function SimulatorScreen({navigation, route}: Props) {
   const {t, lang} = useT();
   const {activeZones, allZones, selectedZone} = useZones();
   const zoneLabel = useZoneLabel();
-  const trips = useTripsStore((s) => s.trips);
   const addTrips = useTripsStore((s) => s.addTrips);
   const addJourney = useJourneysStore((s) => s.addJourney);
   const buffer = useSettingsStore((s) => s.safetyBufferDays);
@@ -55,7 +55,8 @@ export default function SimulatorScreen({navigation, route}: Props) {
   const [saved, setSaved] = useState(false);
 
   const zone = allZones.find((z) => z.id === zoneId) ?? selectedZone;
-  const rules = zoneRules(zone);
+  const ctx = useZoneContext(zone);
+  const rules = ctx.rules;
   const perVisit = isPerVisit(rules);
   const zoneChoices = activeZones.some((z) => z.id === zone.id) ? activeZones : [zone, ...activeZones];
 
@@ -63,7 +64,10 @@ export default function SimulatorScreen({navigation, route}: Props) {
   const countryCode =
     zone.countryCodes.length === 1 ? zone.countryCodes[0] : picked?.zoneId === zone.id ? picked.code : null;
 
-  const result = useMemo(() => simulateStay(trips, zone, entry, duration), [trips, zone, entry, duration]);
+  const result = useMemo(
+    () => simulateStay(ctx.trips, zone, entry, duration, ctx.rules),
+    [ctx, zone, entry, duration]
+  );
   const tone: Tone = result.isViolation ? 'danger' : result.reserveAtExit <= buffer ? 'warning' : 'safe';
   const toneFg = toneColors(theme.colors, tone).fg;
   const sliderMax = Math.max(rules.maxStayDays, duration);
