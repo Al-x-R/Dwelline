@@ -52,7 +52,7 @@ export default function DashboardScreen() {
       <AppHeader/>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.access}>
-          <ZoneAccessBanner zone={selectedZone} access={summary.access}/>
+          <ZoneAccessBanner zone={selectedZone} access={summary.access} promptPassport showRequirements/>
         </View>
 
         {free ? null : (

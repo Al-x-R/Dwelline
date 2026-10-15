@@ -69,6 +69,7 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
         daysUsed: c.daysUsed,
         freedOnDelete: c.daysUsed - withoutJourney.daysUsed,
         tone: toneFor(c.daysUsed, rules.maxStayDays, buffer),
+        free: ctx.access.mode === 'free',
       }];
     });
   }, [zoneDays, allZones, allTrips, journey, buffer, docs]);
@@ -178,6 +179,7 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
                       daysUsed={z.daysUsed}
                       maxDays={z.rules.maxStayDays}
                       tone={z.tone}
+                      free={z.free}
                       daysInJourney={zoneDays.get(z.zone.id) ?? 0}
                     />
                   ))}

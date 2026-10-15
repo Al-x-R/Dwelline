@@ -20,6 +20,7 @@ import { FLOATING_CTA_SPACE } from '../components/app/TabBar';
 import { MonthGrid } from '../components/calendar/MonthGrid';
 import { Button, Card, Pill, ProgressBar, Screen, SectionHeader, toneColors } from '../components/ui';
 import { useZoneContext } from '../hooks/useZoneContext';
+import { ZoneAccessBanner } from '../features/zone/ZoneAccessBanner';
 
 export default function CalendarScreen() {
   const theme = useAppTheme();
@@ -46,6 +47,7 @@ export default function CalendarScreen() {
   const usage = useMemo(() => windowUsage(presence, selected, rules), [presence, selected, rules]);
   const tone = toneFor(usage.daysUsed, rules.maxStayDays, buffer);
   const perVisit = isPerVisit(rules);
+  const free = summary.access.mode === 'free';
   const toneFg = toneColors(theme.colors, tone).fg;
 
   const monthTrips = useMemo(() => {
@@ -65,82 +67,94 @@ export default function CalendarScreen() {
         <View style={styles.titleRow}>
           <View style={styles.flex}>
             <Text style={styles.eyebrow}>{t('calendar.eyebrow')}</Text>
-            <Text style={styles.title}>{t('calendar.title', {rule: zoneLabel.rule(selectedZone)})}</Text>
+            <Text style={styles.title}>
+              {t('calendar.title', {rule: free ? zoneLabel.short(selectedZone) : zoneLabel.rule(selectedZone)})}
+            </Text>
           </View>
-          <Pill label={t(statusKey)} tone={tone} orb/>
+          {free ? null : <Pill label={t(statusKey)} tone={tone} orb/>}
         </View>
 
-        <Card style={styles.block}>
-          <View style={styles.reserveTop}>
-            <View style={styles.flex}>
-              <Text style={styles.caps}>{t('calendar.reserve')}</Text>
-              <Text style={styles.reserveValue}>
-                {usage.daysRemaining}
-                <Text style={styles.reserveMax}> {t('calendar.ofDays', {max: rules.maxStayDays})}</Text>
-              </Text>
+        <View style={styles.block}>
+          <ZoneAccessBanner zone={selectedZone} access={summary.access}/>
+        </View>
+
+        {free ? null : (
+          <Card style={styles.block}>
+            <View style={styles.reserveTop}>
+              <View style={styles.flex}>
+                <Text style={styles.caps}>{t('calendar.reserve')}</Text>
+                <Text style={styles.reserveValue}>
+                  {usage.daysRemaining}
+                  <Text style={styles.reserveMax}> {t('calendar.ofDays', {max: rules.maxStayDays})}</Text>
+                </Text>
+              </View>
+              <View style={styles.reserveRight}>
+                <Text style={[styles.capsStrong, {color: toneFg}]}>{t(`status.${tone}`)}</Text>
+                <Text style={styles.muted}>{t('calendar.used', {count: usage.daysUsed})}</Text>
+              </View>
             </View>
-            <View style={styles.reserveRight}>
-              <Text style={[styles.capsStrong, {color: toneFg}]}>{t(`status.${tone}`)}</Text>
-              <Text style={styles.muted}>{t('calendar.used', {count: usage.daysUsed})}</Text>
+            <ProgressBar progress={usage.daysUsed / rules.maxStayDays} color={toneFg}/>
+            <View style={styles.scale}>
+              <Text style={styles.muted}>{t('calendar.scaleMin')}</Text>
+              <Text style={styles.muted}>{t('calendar.scaleMax', {max: rules.maxStayDays})}</Text>
             </View>
-          </View>
-          <ProgressBar progress={usage.daysUsed / rules.maxStayDays} color={toneFg}/>
-          <View style={styles.scale}>
-            <Text style={styles.muted}>{t('calendar.scaleMin')}</Text>
-            <Text style={styles.muted}>{t('calendar.scaleMax', {max: rules.maxStayDays})}</Text>
-          </View>
-        </Card>
+          </Card>
+        )}
 
         <Card style={styles.block}>
           <MonthGrid month={month} onChangeMonth={setMonth} selected={selected} markers={markers} onSelect={setSelected}/>
           <View style={styles.legend}>
             <Legend color={theme.colors.safe} label={t('calendar.legendInZone')}/>
             <Legend color={theme.dark ? '#E6E8F0' : theme.colors.primary} label={t('calendar.legendSelected')}/>
-            {perVisit ? null : <Legend color={theme.colors.warning} label={t('calendar.legendRollOff')}/>}
+            {perVisit || free ? null : <Legend color={theme.colors.warning} label={t('calendar.legendRollOff')}/>}
           </View>
         </Card>
 
-        <Card style={styles.block}>
-          <View style={styles.windowHeader}>
-            <Ionicons name="time-outline" size={20} color={theme.colors.textPrimary}/>
-            <Text style={styles.windowTitle}>{perVisit ? t('calendar.visitTitle') : t('calendar.windowTitle', {window: rules.windowSizeDays})}</Text>
-            <Pill
-              label={usage.isViolation ? t('calendar.failed') : t('calendar.passed')}
-              tone={usage.isViolation ? 'danger' : 'safe'}
-              icon={usage.isViolation ? 'close-circle' : 'checkmark-circle'}
-            />
-          </View>
-          <Text style={styles.caps}>{t('calendar.interval')}</Text>
-          <Text style={styles.interval}>{fmt.full(usage.windowStart)} — {fmt.full(usage.windowEnd)}</Text>
-          <View style={styles.windowStats}>
-            <View style={styles.flex}>
-              <Text style={styles.caps}>{t('calendar.inZoneInterval')}</Text>
-              <Text style={styles.stat}>{usage.daysUsed} / {rules.maxStayDays}</Text>
+        {free ? null : (
+          <Card style={styles.block}>
+            <View style={styles.windowHeader}>
+              <Ionicons name="time-outline" size={20} color={theme.colors.textPrimary}/>
+              <Text style={styles.windowTitle}>{perVisit ? t('calendar.visitTitle') : t('calendar.windowTitle', {window: rules.windowSizeDays})}</Text>
+              <Pill
+                label={usage.isViolation ? t('calendar.failed') : t('calendar.passed')}
+                tone={usage.isViolation ? 'danger' : 'safe'}
+                icon={usage.isViolation ? 'close-circle' : 'checkmark-circle'}
+              />
             </View>
-            <View style={styles.flex}>
-              <Text style={styles.caps}>{t('calendar.slot')}</Text>
-              <Text style={[styles.stat, {color: toneFg}]}>{fmt.days(usage.daysRemaining)}</Text>
+            <Text style={styles.caps}>{t('calendar.interval')}</Text>
+            <Text style={styles.interval}>{fmt.full(usage.windowStart)} — {fmt.full(usage.windowEnd)}</Text>
+            <View style={styles.windowStats}>
+              <View style={styles.flex}>
+                <Text style={styles.caps}>{t('calendar.inZoneInterval')}</Text>
+                <Text style={styles.stat}>{usage.daysUsed} / {rules.maxStayDays}</Text>
+              </View>
+              <View style={styles.flex}>
+                <Text style={styles.caps}>{t('calendar.slot')}</Text>
+                <Text style={[styles.stat, {color: toneFg}]}>{fmt.days(usage.daysRemaining)}</Text>
+              </View>
             </View>
-          </View>
-        </Card>
+          </Card>
+        )}
 
-        <Card style={styles.block}>
-          <View style={styles.windowHeader}>
-            <Ionicons name="trending-up-outline" size={20} color={theme.colors.accentText}/>
-            <Text style={styles.windowTitle}>{t('calendar.forecastTitle')}</Text>
-          </View>
-          {summary.fullReset && summary.daysUsed > 0 ? (
-            <>
-              <Text style={styles.body}>{t('calendar.fullReset', {max: rules.maxStayDays})}</Text>
-              <Text style={styles.resetDate}>{t('calendar.fullResetFrom', {date: fmt.full(summary.fullReset)})}</Text>
-              <Text style={styles.muted}>{t('calendar.fullResetText')}</Text>
-            </>
-          ) : (
-            <Text style={styles.body}>
-              {perVisit ? t('calendar.perVisitText', {max: rules.maxStayDays}) : t('calendar.noTripsInWindow')}
-            </Text>
-          )}
-        </Card>
+        {free ? null : (
+          <Card style={styles.block}>
+            <View style={styles.windowHeader}>
+              <Ionicons name="trending-up-outline" size={20} color={theme.colors.accentText}/>
+              <Text style={styles.windowTitle}>{t('calendar.forecastTitle')}</Text>
+            </View>
+            {summary.fullReset && summary.daysUsed > 0 ? (
+              <>
+                <Text style={styles.body}>{t('calendar.fullReset', {max: rules.maxStayDays})}</Text>
+                <Text style={styles.resetDate}>{t('calendar.fullResetFrom', {date: fmt.full(summary.fullReset)})}</Text>
+                <Text style={styles.muted}>{t('calendar.fullResetText')}</Text>
+              </>
+            ) : (
+              <Text style={styles.body}>
+                {perVisit ? t('calendar.perVisitText', {max: rules.maxStayDays}) : t('calendar.noTripsInWindow')}
+              </Text>
+            )}
+          </Card>
+        )}
 
         {monthTrips.length > 0 ? (
           <>

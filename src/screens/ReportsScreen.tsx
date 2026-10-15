@@ -54,7 +54,7 @@ export default function ReportsScreen() {
   const zoneSummaries = useMemo(
     () => activeZones.map((zone) => {
       const ctx = zoneContext(zone, trips, docs, today);
-      return {zone, summary: summarizeZone(ctx.trips, zone, buffer, today, ctx.rules)};
+      return {zone, summary: summarizeZone(ctx.trips, zone, buffer, today, ctx.rules), free: ctx.access.mode === 'free'};
     }),
     [activeZones, trips, docs, buffer, today]
   );
@@ -111,13 +111,14 @@ export default function ReportsScreen() {
 
         <SectionHeader title={t('reports.zones')}/>
         <View style={styles.stack}>
-          {zoneSummaries.map(({zone, summary}) => (
+          {zoneSummaries.map(({zone, summary, free}) => (
             <ZoneStatusCard
               key={zone.id}
               zone={zone}
               daysUsed={summary.daysUsed}
               maxDays={summary.rules.maxStayDays}
               tone={summary.tone}
+              free={free}
               onPress={() => {
                 setSelectedZoneId(zone.id);
                 navigation.navigate('MainTabs', {screen: 'Calendar'});

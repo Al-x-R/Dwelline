@@ -24,6 +24,7 @@ import {
 import { CountryPickerSheet } from '../components/app/CountryPickerSheet';
 import { DatePickerSheet } from '../components/calendar/DatePickerSheet';
 import { makeId } from '../features/journey/useJourneyDraft';
+import { ZoneAccessBanner } from '../features/zone/ZoneAccessBanner';
 import { useZoneContext } from '../hooks/useZoneContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Simulator'>;
@@ -58,6 +59,7 @@ export default function SimulatorScreen({navigation, route}: Props) {
   const ctx = useZoneContext(zone);
   const rules = ctx.rules;
   const perVisit = isPerVisit(rules);
+  const free = ctx.access.mode === 'free';
   const zoneChoices = activeZones.some((z) => z.id === zone.id) ? activeZones : [zone, ...activeZones];
 
   // For single-country zones the entry country is obvious.
@@ -130,66 +132,74 @@ export default function SimulatorScreen({navigation, route}: Props) {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.subtitle}>{t('simulator.subtitle', {rule: zoneLabel.rule(zone)})}</Text>
 
-        <Card style={[styles.block, theme.elevation[tone === 'danger' ? 'dangerGlow' : 'safeGlow']]} tone={tone}>
-          <View style={styles.statusRow}>
-            <View style={[styles.orb, {backgroundColor: toneFg, boxShadow: `0 0 8px ${toneFg}`}]}/>
-            <Text style={[styles.statusText, {color: toneFg}]}>{statusLabel}</Text>
-          </View>
+        <View style={styles.block}>
+          <ZoneAccessBanner zone={zone} access={ctx.access} showRequirements/>
+        </View>
 
-          <View style={styles.resultRow}>
-            <ProgressDial
-              progress={result.daysUsedAtExit / rules.maxStayDays}
-              size={136}
-              strokeWidth={12}
-              colors={toneGradient(theme, tone)}
-              showThumb={false}
-            >
-              <Text style={styles.dialValue}>{result.daysUsedAtExit}</Text>
-              <Text style={styles.dialCaption}>{t('simulator.ofDays', {max: rules.maxStayDays})}</Text>
-            </ProgressDial>
-            <View style={styles.resultTiles}>
-              <View style={styles.resultTile}>
-                <Text style={styles.caps}>{t('simulator.continuous')}</Text>
-                <Text style={styles.tileValue}>
-                  <Text style={{color: theme.colors.safe}}>{result.maxContinuousDays}</Text>{' '}
-                  <Text style={styles.tileUnit}>{t('simulator.inRow', {count: result.maxContinuousDays})}</Text>
-                </Text>
+        {free ? null : (
+          <>
+            <Card style={[styles.block, theme.elevation[tone === 'danger' ? 'dangerGlow' : 'safeGlow']]} tone={tone}>
+              <View style={styles.statusRow}>
+                <View style={[styles.orb, {backgroundColor: toneFg, boxShadow: `0 0 8px ${toneFg}`}]}/>
+                <Text style={[styles.statusText, {color: toneFg}]}>{statusLabel}</Text>
               </View>
-              <View style={styles.resultTile}>
-                <Text style={styles.caps}>{t('simulator.reserve')}</Text>
-                <Text style={styles.tileValue}>
-                  {result.reserveAtExit}{' '}
-                  <Text style={styles.tileUnit}>{t('simulator.inReserve', {count: result.reserveAtExit})}</Text>
-                </Text>
+
+              <View style={styles.resultRow}>
+                <ProgressDial
+                  progress={result.daysUsedAtExit / rules.maxStayDays}
+                  size={136}
+                  strokeWidth={12}
+                  colors={toneGradient(theme, tone)}
+                  showThumb={false}
+                >
+                  <Text style={styles.dialValue}>{result.daysUsedAtExit}</Text>
+                  <Text style={styles.dialCaption}>{t('simulator.ofDays', {max: rules.maxStayDays})}</Text>
+                </ProgressDial>
+                <View style={styles.resultTiles}>
+                  <View style={styles.resultTile}>
+                    <Text style={styles.caps}>{t('simulator.continuous')}</Text>
+                    <Text style={styles.tileValue}>
+                      <Text style={{color: theme.colors.safe}}>{result.maxContinuousDays}</Text>{' '}
+                      <Text style={styles.tileUnit}>{t('simulator.inRow', {count: result.maxContinuousDays})}</Text>
+                    </Text>
+                  </View>
+                  <View style={styles.resultTile}>
+                    <Text style={styles.caps}>{t('simulator.reserve')}</Text>
+                    <Text style={styles.tileValue}>
+                      {result.reserveAtExit}{' '}
+                      <Text style={styles.tileUnit}>{t('simulator.inReserve', {count: result.reserveAtExit})}</Text>
+                    </Text>
+                  </View>
+                </View>
               </View>
-            </View>
-          </View>
 
-          <View style={styles.critical}>
-            <View style={[styles.criticalIcon, {backgroundColor: toneColors(theme.colors, tone).bg}]}>
-              <Ionicons name="shield-checkmark-outline" size={18} color={toneFg}/>
-            </View>
-            <View style={styles.flex}>
-              <Text style={styles.caps}>{t('simulator.criticalExit')}</Text>
-              <Text style={styles.criticalValue}>
-                {result.criticalExitDate
-                  ? t('simulator.criticalExitValue', {date: fmt.full(result.criticalExitDate)})
-                  : t('simulator.noEntry')}
-              </Text>
-            </View>
-            <Ionicons name="airplane-outline" size={20} color={theme.colors.textMuted}/>
-          </View>
-        </Card>
+              <View style={styles.critical}>
+                <View style={[styles.criticalIcon, {backgroundColor: toneColors(theme.colors, tone).bg}]}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color={toneFg}/>
+                </View>
+                <View style={styles.flex}>
+                  <Text style={styles.caps}>{t('simulator.criticalExit')}</Text>
+                  <Text style={styles.criticalValue}>
+                    {result.criticalExitDate
+                      ? t('simulator.criticalExitValue', {date: fmt.full(result.criticalExitDate)})
+                      : t('simulator.noEntry')}
+                  </Text>
+                </View>
+                <Ionicons name="airplane-outline" size={20} color={theme.colors.textMuted}/>
+              </View>
+            </Card>
 
-        {result.isViolation ? (
-          <View style={styles.block}>
-            <InfoBanner
-              icon="warning-outline"
-              tone="danger"
-              text={t('simulator.overstayText', {days: fmt.days(result.overageDays)})}
-            />
-          </View>
-        ) : null}
+            {result.isViolation ? (
+              <View style={styles.block}>
+                <InfoBanner
+                  icon="warning-outline"
+                  tone="danger"
+                  text={t('simulator.overstayText', {days: fmt.days(result.overageDays)})}
+                />
+              </View>
+            ) : null}
+          </>
+        )}
 
         <Card style={styles.block}>
           <View style={styles.cardHeader}>
@@ -280,73 +290,77 @@ export default function SimulatorScreen({navigation, route}: Props) {
           </View>
         </Card>
 
-        <Card style={styles.block}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="pulse-outline" size={20} color={theme.colors.accentText}/>
-            <Text style={[styles.cardTitle, styles.flex]}>{perVisit ? t('simulator.visitDynamics') : t('simulator.dynamics', {window: rules.windowSizeDays})}</Text>
-            {result.freedDuringTrip > 0 ? (
-              <Pill label={t('simulator.gain', {days: fmt.days(result.freedDuringTrip)})} tone="safe" caps/>
-            ) : null}
-          </View>
-          <Text style={styles.body}>{perVisit ? t('simulator.visitDynamicsText') : t('simulator.dynamicsText')}</Text>
+        {free ? null : (
+          <Card style={styles.block}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="pulse-outline" size={20} color={theme.colors.accentText}/>
+              <Text style={[styles.cardTitle, styles.flex]}>{perVisit ? t('simulator.visitDynamics') : t('simulator.dynamics', {window: rules.windowSizeDays})}</Text>
+              {result.freedDuringTrip > 0 ? (
+                <Pill label={t('simulator.gain', {days: fmt.days(result.freedDuringTrip)})} tone="safe" caps/>
+              ) : null}
+            </View>
+            <Text style={styles.body}>{perVisit ? t('simulator.visitDynamicsText') : t('simulator.dynamicsText')}</Text>
 
-          <View style={styles.timeline}>
-            <View style={styles.timelineLabels}>
-              <Text style={styles.timelineText}>{t(perVisit ? 'simulator.visitStart' : 'simulator.windowStart', {date: fmt.short(result.windowStartAtExit)})}</Text>
-              <Text style={styles.timelineText}>{t('simulator.entry', {date: fmt.short(result.entryDate)})}</Text>
-              <Text style={styles.timelineText}>{t('simulator.exit', {date: fmt.short(result.exitDate)})}</Text>
+            <View style={styles.timeline}>
+              <View style={styles.timelineLabels}>
+                <Text style={styles.timelineText}>{t(perVisit ? 'simulator.visitStart' : 'simulator.windowStart', {date: fmt.short(result.windowStartAtExit)})}</Text>
+                <Text style={styles.timelineText}>{t('simulator.entry', {date: fmt.short(result.entryDate)})}</Text>
+                <Text style={styles.timelineText}>{t('simulator.exit', {date: fmt.short(result.exitDate)})}</Text>
+              </View>
+              <ProgressBar
+                height={10}
+                segments={[
+                  {value: usedPart, color: theme.colors.textMuted},
+                  {value: plannedPart, color: theme.colors.safe},
+                  ...(overDays > 0 ? [{value: overDays / rules.maxStayDays, color: theme.colors.danger}] : []),
+                ]}
+              />
+              <View style={styles.legendRow}>
+                <Legend color={theme.colors.textMuted} label={t('simulator.usedShort')} value={`${result.usedBeforeTrip}`}/>
+                <Legend color={theme.colors.safe} label={t('simulator.plannedShort')} value={`${duration}`}/>
+                {overDays > 0 ? (
+                  <Legend color={theme.colors.danger} label={t('simulator.overShort')} value={`${overDays}`}/>
+                ) : (
+                  <Legend color={theme.colors.track} label={t('simulator.freeShort')} value={`${freeDays}`}/>
+                )}
+              </View>
             </View>
-            <ProgressBar
-              height={10}
-              segments={[
-                {value: usedPart, color: theme.colors.textMuted},
-                {value: plannedPart, color: theme.colors.safe},
-                ...(overDays > 0 ? [{value: overDays / rules.maxStayDays, color: theme.colors.danger}] : []),
-              ]}
-            />
-            <View style={styles.legendRow}>
-              <Legend color={theme.colors.textMuted} label={t('simulator.usedShort')} value={`${result.usedBeforeTrip}`}/>
-              <Legend color={theme.colors.safe} label={t('simulator.plannedShort')} value={`${duration}`}/>
-              {overDays > 0 ? (
-                <Legend color={theme.colors.danger} label={t('simulator.overShort')} value={`${overDays}`}/>
-              ) : (
-                <Legend color={theme.colors.track} label={t('simulator.freeShort')} value={`${freeDays}`}/>
-              )}
-            </View>
-          </View>
 
-          {perVisit ? null : <View style={styles.rollOff}>
-            <View style={styles.rollOffIcon}>
-              <Ionicons name="refresh-outline" size={18} color={theme.colors.safe}/>
-            </View>
-            <View style={styles.flex}>
-              <Text style={styles.rollOffTitle}>
-                {t('simulator.rollOff')}
-                {result.freedDuringTrip > 0 ? (
-                  <Text style={{color: theme.colors.safe}}>  +{fmt.days(result.freedDuringTrip)}</Text>
-                ) : null}
-              </Text>
-              <Text style={styles.muted}>
-                {result.firstRollOffDate
-                  ? t('simulator.rollOffText', {date: fmt.full(result.firstRollOffDate), window: rules.windowSizeDays})
-                  : t('simulator.noRollOff')}
-              </Text>
-            </View>
-          </View>}
+            {perVisit ? null : (
+              <View style={styles.rollOff}>
+                <View style={styles.rollOffIcon}>
+                  <Ionicons name="refresh-outline" size={18} color={theme.colors.safe}/>
+                </View>
+                <View style={styles.flex}>
+                  <Text style={styles.rollOffTitle}>
+                    {t('simulator.rollOff')}
+                    {result.freedDuringTrip > 0 ? (
+                      <Text style={{color: theme.colors.safe}}>  +{fmt.days(result.freedDuringTrip)}</Text>
+                    ) : null}
+                  </Text>
+                  <Text style={styles.muted}>
+                    {result.firstRollOffDate
+                      ? t('simulator.rollOffText', {date: fmt.full(result.firstRollOffDate), window: rules.windowSizeDays})
+                      : t('simulator.noRollOff')}
+                  </Text>
+                </View>
+              </View>
+            )}
 
-          <View style={styles.alertRow}>
-            <Ionicons name="notifications-outline" size={20} color={theme.colors.textBody}/>
-            <View style={styles.flex}>
-              <Text style={styles.alertTitle}>{t('simulator.riskAlert')}</Text>
-              <Text style={styles.muted}>{t('simulator.riskAlertHint')}</Text>
+            <View style={styles.alertRow}>
+              <Ionicons name="notifications-outline" size={20} color={theme.colors.textBody}/>
+              <View style={styles.flex}>
+                <Text style={styles.alertTitle}>{t('simulator.riskAlert')}</Text>
+                <Text style={styles.muted}>{t('simulator.riskAlertHint')}</Text>
+              </View>
+              <Toggle
+                value={overstayAlerts}
+                onValueChange={(v) => setAlerts({overstayAlerts: v})}
+                accessibilityLabel={t('simulator.riskAlert')}
+              />
             </View>
-            <Toggle
-              value={overstayAlerts}
-              onValueChange={(v) => setAlerts({overstayAlerts: v})}
-              accessibilityLabel={t('simulator.riskAlert')}
-            />
-          </View>
-        </Card>
+          </Card>
+        )}
 
         <View style={[styles.block, styles.actions]}>
           <Button

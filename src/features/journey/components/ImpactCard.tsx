@@ -24,10 +24,12 @@ interface Props {
   remaining: string;
   windowReset: string | null;
   rows: ImpactRow[];
+  // No limit for the user's documents: only the per-zone split is shown.
+  free?: boolean;
 }
 
 // "Limit impact": how many days the route takes and how they split across zones.
-export function ImpactCard({title, tone, used, max, remaining, windowReset, rows}: Props) {
+export function ImpactCard({title, tone, used, max, remaining, windowReset, rows, free}: Props) {
   const theme = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const {t} = useT();
@@ -39,31 +41,33 @@ export function ImpactCard({title, tone, used, max, remaining, windowReset, rows
       <View style={styles.header}>
         <Ionicons name="shield-checkmark-outline" size={22} color={fg}/>
         <Text style={styles.title}>{title}</Text>
-        <Pill label={t(`status.${tone}`)} tone={tone} orb caps/>
+        {free ? <Pill label={t('zone.ruleFree')} tone="safe" caps/> : <Pill label={t(`status.${tone}`)} tone={tone} orb caps/>}
       </View>
 
-      <View style={styles.main}>
-        <ProgressDial progress={used / max} size={84} strokeWidth={8} colors={toneGradient(theme, tone)} showThumb={false}>
-          <Text style={styles.percent}>{percent}%</Text>
-        </ProgressDial>
-        <View style={styles.usedBox}>
-          <Text style={styles.caps}>{t('form.used')}</Text>
-          <Text style={[styles.used, {color: fg}]}>{used}</Text>
-          <Text style={styles.muted}>{t('form.ofMax', {max})}</Text>
-        </View>
-        <View style={styles.side}>
-          <View style={styles.sideRow}>
-            <Text style={styles.muted}>{t('form.willRemain')}</Text>
-            <Text style={styles.sideValue}>{remaining}</Text>
+      {free ? null : (
+        <View style={styles.main}>
+          <ProgressDial progress={used / max} size={84} strokeWidth={8} colors={toneGradient(theme, tone)} showThumb={false}>
+            <Text style={styles.percent}>{percent}%</Text>
+          </ProgressDial>
+          <View style={styles.usedBox}>
+            <Text style={styles.caps}>{t('form.used')}</Text>
+            <Text style={[styles.used, {color: fg}]}>{used}</Text>
+            <Text style={styles.muted}>{t('form.ofMax', {max})}</Text>
           </View>
-          {windowReset ? (
+          <View style={styles.side}>
             <View style={styles.sideRow}>
-              <Text style={styles.muted}>{t('form.windowReset')}</Text>
-              <Text style={styles.sideValue}>{windowReset}</Text>
+              <Text style={styles.muted}>{t('form.willRemain')}</Text>
+              <Text style={styles.sideValue}>{remaining}</Text>
             </View>
-          ) : null}
+            {windowReset ? (
+              <View style={styles.sideRow}>
+                <Text style={styles.muted}>{t('form.windowReset')}</Text>
+                <Text style={styles.sideValue}>{windowReset}</Text>
+              </View>
+            ) : null}
+          </View>
         </View>
-      </View>
+      )}
 
       {rows.length > 0 ? (
         <View style={styles.rows}>

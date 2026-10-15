@@ -8,7 +8,7 @@ import { useAppTheme } from '../../hooks/useAppTheme';
 import { useThemedStyles } from '../../hooks/useThemedStyles';
 import { useZoneLabel } from '../../hooks/useZones';
 import { useT } from '../../i18n';
-import { Card, FlagBadge, ProgressBar, toneColors } from '../../components/ui';
+import { Card, FlagBadge, Pill, ProgressBar, toneColors } from '../../components/ui';
 
 interface Props {
   zone: ZoneConfig;
@@ -17,10 +17,12 @@ interface Props {
   tone: ZoneTone;
   // How many of the used days fall on this particular trip.
   daysInJourney?: number;
+  // No limit for the user's documents: show the days without a cap.
+  free?: boolean;
   onPress?: () => void;
 }
 
-export function ZoneStatusCard({zone, daysUsed, maxDays, tone, daysInJourney, onPress}: Props) {
+export function ZoneStatusCard({zone, daysUsed, maxDays, tone, daysInJourney, free, onPress}: Props) {
   const theme = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const {t} = useT();
@@ -33,17 +35,25 @@ export function ZoneStatusCard({zone, daysUsed, maxDays, tone, daysInJourney, on
       <View style={styles.top}>
         <FlagBadge flag={zone.flag} size={36}/>
         <Text style={styles.name} numberOfLines={1}>{zoneLabel.name(zone)}</Text>
-        <Text style={styles.value}>
-          <Text style={[styles.used, {color: daysUsed > 0 ? fg : theme.colors.textPrimary}]}>{daysUsed}</Text>
-          {' '}/ {fmtDays(t, maxDays)}
-        </Text>
+        {free ? (
+          <Pill label={t('zone.ruleFree')} tone="safe" caps/>
+        ) : (
+          <Text style={styles.value}>
+            <Text style={[styles.used, {color: daysUsed > 0 ? fg : theme.colors.textPrimary}]}>{daysUsed}</Text>
+            {' '}/ {fmtDays(t, maxDays)}
+          </Text>
+        )}
       </View>
-      <View style={styles.bar}>
-        <ProgressBar progress={daysUsed / maxDays} color={fg} thumb/>
-      </View>
-      <View style={styles.bottom}>
+      {free ? null : (
+        <View style={styles.bar}>
+          <ProgressBar progress={daysUsed / maxDays} color={fg} thumb/>
+        </View>
+      )}
+      <View style={[styles.bottom, free && styles.bottomFree]}>
         <Text style={styles.muted}>
-          {t('journey.remainingLabel')} <Text style={styles.strong}>{t('common.days', {count: remaining})}</Text>
+          {free
+            ? t('zoneSheet.freeForYou')
+            : <>{t('journey.remainingLabel')} <Text style={styles.strong}>{t('common.days', {count: remaining})}</Text></>}
         </Text>
         {daysInJourney !== undefined ? (
           <Text style={styles.caption}>• {t('journey.ofThemInTrip', {count: daysInJourney})}</Text>
@@ -65,6 +75,7 @@ function createStyles({colors}: AppTheme) {
     used: {...typography.headlineSm, fontFamily: fonts.bold},
     bar: {marginVertical: space.md},
     bottom: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.sm},
+    bottomFree: {marginTop: space.gutterSm},
     muted: {...typography.bodyMd, color: colors.textBody},
     strong: {fontFamily: fonts.bold, color: colors.textPrimary},
     caption: {...typography.bodySm, color: colors.textMuted, flexShrink: 1, textAlign: 'right'},

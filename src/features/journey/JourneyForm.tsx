@@ -89,6 +89,7 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
     const zone = allZones.find((z) => z.id === (touched.includes(selectedZone.id) ? selectedZone.id : touched[0])) ?? selectedZone;
     const ctx = zoneContext(zone, [...otherTrips, ...draftTrips], docs);
     const rules = ctx.rules;
+    const free = ctx.access.mode === 'free';
     const last = draftTrips[draftTrips.length - 1];
     const end = last.exitDate ?? (last.entryDate > todayIso() ? last.entryDate : todayIso());
     const presence = buildPresenceSet(ctx.trips, zone.id, todayIso());
@@ -113,7 +114,8 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
     }
 
     return {
-      title: t('form.impact', {rule: zoneLabel.rule(zone)}),
+      title: free ? t('form.impactZone', {zone: zoneLabel.name(zone)}) : t('form.impact', {rule: zoneLabel.rule(zone)}),
+      free,
       tone: toneFor(usage.daysUsed, rules.maxStayDays, buffer),
       used: usage.daysUsed,
       max: rules.maxStayDays,
@@ -129,6 +131,7 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
     const zone = zoneOf(lastPoint.countryCode);
     if (!zone || !completePoints) return null;
     const ctx = zoneContext(zone, [...otherTrips, ...buildTrips({...draft, exitDate: date}, allZones)], docs);
+    if (ctx.access.mode === 'free') return null;
     const rules = ctx.rules;
     const presence = buildPresenceSet(ctx.trips, zone.id, todayIso());
     const usage = windowUsage(presence, date, rules);
@@ -143,6 +146,7 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
     const zone = zoneOf(code);
     if (!zone) return undefined;
     const ctx = zoneContext(zone, otherTrips, docs);
+    if (ctx.access.mode === 'free') return undefined;
     const rules = ctx.rules;
     const usage = windowUsage(buildPresenceSet(ctx.trips, zone.id, todayIso()), todayIso(), rules);
     return t('datePicker.corridor', {used: usage.daysUsed, max: rules.maxStayDays});

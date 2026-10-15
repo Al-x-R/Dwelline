@@ -15,10 +15,14 @@ import { InfoBanner } from '../../components/ui';
 interface Props {
   zone: ZoneConfig;
   access: ZoneAccess;
+  // "Add your passport" prompt — on the home screen only, so other screens don't repeat it.
+  promptPassport?: boolean;
+  // ETA / insurance reminders — where the user plans or reviews the zone as a whole.
+  showRequirements?: boolean;
 }
 
 // What the user's documents mean for this zone: no limit, visa needed, unverified, exempt days, requirements.
-export function ZoneAccessBanner({zone, access}: Props) {
+export function ZoneAccessBanner({zone, access, promptPassport = false, showRequirements = false}: Props) {
   const {t, lang} = useT();
   const fmt = useFormatters();
   const zoneLabel = useZoneLabel();
@@ -32,16 +36,18 @@ export function ZoneAccessBanner({zone, access}: Props) {
   const banners: React.ReactNode[] = [];
 
   if (passports.length === 0) {
-    banners.push(
-      <Pressable key="passport" onPress={() => navigation.navigate('Settings')} accessibilityRole="button">
-        <InfoBanner
-          icon="id-card-outline"
-          tone="primary"
-          title={t('access.addPassportTitle')}
-          text={t('access.addPassportText', {rule})}
-        />
-      </Pressable>
-    );
+    if (promptPassport) {
+      banners.push(
+        <Pressable key="passport" onPress={() => navigation.navigate('Settings')} accessibilityRole="button">
+          <InfoBanner
+            icon="id-card-outline"
+            tone="primary"
+            title={t('access.addPassportTitle')}
+            text={t('access.addPassportText', {rule})}
+          />
+        </Pressable>
+      );
+    }
   } else if (access.mode === 'free') {
     const e = access.exemptions[0];
     banners.push(
@@ -80,7 +86,7 @@ export function ZoneAccessBanner({zone, access}: Props) {
     }
   }
 
-  if (access.mode !== 'free' && access.requires.length > 0) {
+  if (showRequirements && access.mode !== 'free' && access.requires.length > 0) {
     banners.push(
       <InfoBanner
         key="requires"
