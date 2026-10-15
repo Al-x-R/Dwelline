@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Trip, ZoneId } from '../types/Trip';
-import { calculateCompliance, findExitDeadline, findMaxStayFromDate } from '../core/schengenCalculator';
+import { calculateCompliance, findExitDeadline } from '../core/schengenCalculator';
 import { useZonesStore } from './zonesStore';
 
 const STORAGE_KEY = '@dwelline/trips';
@@ -17,7 +17,9 @@ interface TripsState {
 
     getCompliance: (zoneId: ZoneId) => ReturnType<typeof calculateCompliance>;
     getExitDeadline: (zoneId: ZoneId) => string | null;
-    addTrips: (trips: Omit<Trip, 'id'>[]) => Promise<void>;
+    addTrips: (trips: (Omit<Trip, 'id'> & { id?: string })[]) => Promise<void>;
+    // Atomic replace: remove segments by id and add new ones in a single storage write.
+    replaceTrips: (removeIds: string[], add: Trip[]) => Promise<void>;
     clearTrips: () => Promise<void>;
 }
 
@@ -79,6 +81,13 @@ export const useTripsStore = create<TripsState>((set, get) => ({
             id: t.id ?? `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         }));
         const updated = [...get().trips, ...newTrips];
+        set({ trips: updated });
+        await persist(updated);
+    },
+
+    replaceTrips: async (removeIds, add) => {
+        const remove = new Set(removeIds);
+        const updated = [...get().trips.filter((t) => !remove.has(t.id)), ...add];
         set({ trips: updated });
         await persist(updated);
     },

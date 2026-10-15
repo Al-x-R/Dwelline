@@ -12,6 +12,7 @@ interface JourneysState {
     addJourney: (journey: Omit<Journey, 'id' | 'createdAt'>) => Promise<Journey>;
     updateJourney: (id: string, updates: Partial<Journey>) => Promise<void>;
     deleteJourney: (id: string) => Promise<void>;
+    clearJourneys: () => Promise<void>;
 
     getJourney: (id: string) => Journey | undefined;
 }
@@ -57,6 +58,11 @@ export const useJourneysStore = create<JourneysState>((set, get) => ({
         const updated = get().journeys.filter((j) => j.id !== id);
         set({ journeys: updated });
         await persist(updated);
+    },
+
+    clearJourneys: async () => {
+        set({ journeys: [] });
+        await AsyncStorage.removeItem(STORAGE_KEY);
     },
 
     getJourney: (id) => {
