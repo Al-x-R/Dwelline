@@ -1,20 +1,26 @@
+import { SCHENGEN_CODES } from './countries';
+
 export interface ZoneConfig {
     id: string;
     name: string;
     flag: string;
     ruleType: 'rolling_window' | 'continuous_from_entry';
-    windowSizeDays?: number;      // для rolling_window
-    maxStayDays?: number;         // для rolling_window
-    continuousLimitDays?: number; // для continuous_from_entry
-    isMultiCountry: boolean;      // Шенген = true, остальные = false
-    isImplemented: boolean;       // есть ли уже проверенная, точная логика
-    isCustom?: boolean;           // добавлена пользователем вручную
-    note?: string;
+    windowSizeDays?: number;      // rolling_window
+    maxStayDays?: number;         // rolling_window
+    continuousLimitDays?: number; // continuous_from_entry
+    isMultiCountry: boolean;
+    isImplemented: boolean;       // whether verified, exact logic exists yet
+    isCustom?: boolean;
+    countryCodes: string[];       // ISO codes of countries whose days count toward the zone
 }
+
+// Country outside tracked zones: the segment stays in the route but does not consume limits.
+export const NO_ZONE = 'none';
 
 export const BUILT_IN_ZONES: ZoneConfig[] = [
     {
         id: 'schengen',
+        countryCodes: SCHENGEN_CODES,
         name: 'Шенгенская зона',
         flag: '🇪🇺',
         ruleType: 'rolling_window',
@@ -25,6 +31,7 @@ export const BUILT_IN_ZONES: ZoneConfig[] = [
     },
     {
         id: 'moldova',
+        countryCodes: ['MD'],
         name: 'Молдова',
         flag: '🇲🇩',
         ruleType: 'rolling_window',
@@ -35,6 +42,7 @@ export const BUILT_IN_ZONES: ZoneConfig[] = [
     },
     {
         id: 'cyprus',
+        countryCodes: ['CY'],
         name: 'Кипр',
         flag: '🇨🇾',
         ruleType: 'rolling_window',
@@ -42,10 +50,10 @@ export const BUILT_IN_ZONES: ZoneConfig[] = [
         maxStayDays: 90,
         isMultiCountry: false,
         isImplemented: true,
-        note: 'Проверь актуальные условия перед долгой поездкой',
     },
     {
         id: 'turkey',
+        countryCodes: ['TR'],
         name: 'Турция',
         flag: '🇹🇷',
         ruleType: 'rolling_window',
@@ -56,16 +64,17 @@ export const BUILT_IN_ZONES: ZoneConfig[] = [
     },
     {
         id: 'georgia',
+        countryCodes: ['GE'],
         name: 'Грузия',
         flag: '🇬🇪',
         ruleType: 'continuous_from_entry',
         continuousLimitDays: 365,
         isMultiCountry: false,
         isImplemented: false,
-        note: 'Правило часто меняется, уточни перед поездкой',
     },
     {
         id: 'egypt',
+        countryCodes: ['EG'],
         name: 'Египет',
         flag: '🇪🇬',
         ruleType: 'rolling_window',
@@ -73,10 +82,10 @@ export const BUILT_IN_ZONES: ZoneConfig[] = [
         maxStayDays: 90,
         isMultiCountry: false,
         isImplemented: false,
-        note: 'Точные условия для украинцев не подтверждены',
     },
     {
         id: 'uae',
+        countryCodes: ['AE'],
         name: 'ОАЭ',
         flag: '🇦🇪',
         ruleType: 'rolling_window',
@@ -84,10 +93,10 @@ export const BUILT_IN_ZONES: ZoneConfig[] = [
         maxStayDays: 90,
         isMultiCountry: false,
         isImplemented: false,
-        note: 'Точные условия для украинцев не подтверждены',
     },
     {
         id: 'uk',
+        countryCodes: ['GB'],
         name: 'Великобритания',
         flag: '🇬🇧',
         ruleType: 'rolling_window',

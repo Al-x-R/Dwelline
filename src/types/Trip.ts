@@ -27,9 +27,3 @@ export interface ComplianceResult {
   windowStart: string;      // start of the current 180-day window
   windowEnd: string;        // end of the window (= today)
 }
-
-interface RoutePointExtra {
-  departureTime?: string; // HH:mm
-  arrivalTime?: string;
-  transportMode?: 'plane' | 'car' | 'bus' | 'train' | 'ferry' | 'other';
-}
