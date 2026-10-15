@@ -22,7 +22,8 @@ import {
   Toggle, toneColors, toneGradient, type Tone,
 } from '../components/ui';
 import { CountryPickerSheet } from '../components/app/CountryPickerSheet';
-import { DatePickerSheet } from '../components/calendar/DatePickerSheet';
+import type { DateImpact } from '../components/calendar/DatePickerSheet';
+import { DateRangeSheet } from '../components/calendar/DateRangeSheet';
 import { makeId } from '../features/journey/useJourneyDraft';
 import { ZoneAccessBanner } from '../features/zone/ZoneAccessBanner';
 import { useZoneContext } from '../hooks/useZoneContext';
@@ -31,7 +32,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Simulator'>;
 
 const DEFAULT_OFFSET_DAYS = 7;
 const DEFAULT_DURATION = 30;
-const STEP = 5;
+const STEP = 1;
 
 export default function SimulatorScreen({navigation, route}: Props) {
   const theme = useAppTheme();
@@ -73,6 +74,13 @@ export default function SimulatorScreen({navigation, route}: Props) {
   const tone: Tone = result.isViolation ? 'danger' : result.reserveAtExit <= buffer ? 'warning' : 'safe';
   const toneFg = toneColors(theme.colors, tone).fg;
   const sliderMax = Math.max(rules.maxStayDays, duration);
+  const exitDate = dayjs(entry).add(duration - 1, 'day').format('YYYY-MM-DD');
+
+  const rangeImpact = (start: string, end: string): DateImpact | null => {
+    if (free) return null;
+    const r = simulateStay(ctx.trips, zone, start, dayjs(end).diff(dayjs(start), 'day') + 1, ctx.rules);
+    return {ok: !r.isViolation, days: r.isViolation ? r.overageDays : r.reserveAtExit, zoneName: zoneLabel.short(zone)};
+  };
 
   const statusLabel = result.isViolation
     ? t('simulator.denied')
@@ -230,8 +238,8 @@ export default function SimulatorScreen({navigation, route}: Props) {
               <Ionicons name="calendar-outline" size={18} color={theme.colors.accentText}/>
             </View>
             <View style={styles.flex}>
-              <Text style={styles.dateValue}>{fmt.full(entry)}</Text>
-              <Text style={styles.muted}>{fmt.weekday(entry)}</Text>
+              <Text style={styles.dateValue}>{fmt.short(entry)} — {fmt.shortYear(exitDate)}</Text>
+              <Text style={styles.muted}>{fmt.weekday(entry)} • {t('common.days', {count: duration})}</Text>
             </View>
             <Text style={styles.link}>{t('common.edit')}</Text>
             <Ionicons name="chevron-forward" size={16} color={theme.colors.accentText}/>
@@ -257,14 +265,14 @@ export default function SimulatorScreen({navigation, route}: Props) {
           </View>
           <View style={styles.stepRow}>
             <Button
-              label={`− ${t('simulator.step', {count: STEP})}`}
+              label={`− ${t('common.days', {count: STEP})}`}
               variant="secondary"
               size="md"
               onPress={() => setDuration((d) => Math.max(1, d - STEP))}
               style={styles.flex}
             />
             <Button
-              label={`+ ${t('simulator.step', {count: STEP})}`}
+              label={`+ ${t('common.days', {count: STEP})}`}
               variant="secondary"
               size="md"
               onPress={() => setDuration((d) => Math.min(sliderMax, d + STEP))}
@@ -374,13 +382,15 @@ export default function SimulatorScreen({navigation, route}: Props) {
         </View>
       </ScrollView>
 
-      <DatePickerSheet
+      <DateRangeSheet
         visible={datePicker}
-        title={t('simulator.entryDate')}
-        value={entry}
+        start={entry}
+        end={exitDate}
         minDate={todayIso()}
-        onConfirm={(d) => {
-          setEntry(d);
+        impact={rangeImpact}
+        onConfirm={(start, end) => {
+          setEntry(start);
+          setDuration(dayjs(end).diff(dayjs(start), 'day') + 1);
           setSaved(false);
           setDatePicker(false);
         }}
