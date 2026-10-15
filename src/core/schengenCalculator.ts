@@ -17,7 +17,7 @@ function getTripDates(trip: Trip, todayIfOpen: string): string[] {
     return dates;
 }
 
-function buildPresenceSet(trips: Trip[], zoneId: string, todayIfOpen: string): Set<string> {
+export function buildPresenceSet(trips: Trip[], zoneId: string, todayIfOpen: string): Set<string> {
     const presence = new Set<string>();
     for (const trip of trips) {
         if (trip.zoneId !== zoneId) continue;
@@ -27,7 +27,7 @@ function buildPresenceSet(trips: Trip[], zoneId: string, todayIfOpen: string): S
     return presence;
 }
 
-function countDaysInWindow(presence: Set<string>, checkDate: string, windowSizeDays: number): number {
+export function countDaysInWindow(presence: Set<string>, checkDate: string, windowSizeDays: number): number {
     const end = dayjs(checkDate);
     const start = end.subtract(windowSizeDays - 1, 'day');
 
