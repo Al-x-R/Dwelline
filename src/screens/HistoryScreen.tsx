@@ -1,108 +1,196 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import dayjs from 'dayjs';
+import React, { useCallback, useMemo, useState } from 'react';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { useJourneysStore } from '../store/journeysStore';
-import { useTripsStore } from '../store/tripsStore';
-import type { Journey } from '../types/Journey';
-import type { Trip } from '../types/Trip';
-import { daysWord } from '../utils/format';
+import { radius, space, tabularNums, typography, fonts, type AppTheme } from '../constants/theme';
+import { NO_ZONE } from '../constants/zones';
+import { useAppTheme } from '../hooks/useAppTheme';
+import { useThemedStyles } from '../hooks/useThemedStyles';
+import { useFormatters } from '../hooks/useFormatters';
+import { useZoneLabel, useZones } from '../hooks/useZones';
+import { useZoneSummary } from '../hooks/useZoneSummary';
+import { useT } from '../i18n';
+import { useRootNavigation } from '../navigation/types';
+import { tripDaysCount } from '../core/zoneAnalytics';
+import { shareTripsCsv } from '../services/exportService';
+import { AppHeader } from '../components/app/AppHeader';
+import { FLOATING_CTA_SPACE } from '../components/app/TabBar';
+import { Button, Card, EmptyState, IconButton, ProgressBar, Screen, SectionHeader, toneColors } from '../components/ui';
+import { JourneyCard } from '../features/journey/JourneyCard';
+import { useJourneyList, type JourneyListItem } from '../features/journey/useJourneyList';
+
+type Filter = 'all' | 'zone' | 'other';
 
 export default function HistoryScreen() {
-  const navigation = useNavigation<any>();
-  const journeys = useJourneysStore((s) => s.journeys);
-  const trips = useTripsStore((s) => s.trips);
+  const theme = useAppTheme();
+  const styles = useThemedStyles(createStyles);
+  const navigation = useRootNavigation();
+  const fmt = useFormatters();
+  const {t, lang} = useT();
+  const {selectedZone} = useZones();
+  const zoneLabel = useZoneLabel();
+  const summary = useZoneSummary(selectedZone);
+  const journeys = useJourneyList();
+  const [filter, setFilter] = useState<Filter>('all');
+  const {rules} = summary;
 
-  const sortedJourneys = useMemo(() => {
-    return [...journeys].sort(
-      (a, b) => dayjs(b.createdAt).valueOf() - dayjs(a.createdAt).valueOf()
-    );
-  }, [journeys]);
-
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <Text style={styles.title}>История поездок</Text>
-
-      <FlatList
-        data={sortedJourneys}
-        keyExtractor={(item: Journey) => item.id}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={<Text style={styles.emptyText}>Поездок пока нет</Text>}
-        renderItem={({item}: { item: Journey }) => {
-          const journeyTrips = trips.filter((t: Trip) => item.tripIds.includes(t.id));
-          return (
-            <JourneyRow
-              journey={item}
-              trips={journeyTrips}
-              onPress={() => navigation.navigate('JourneyDetail', {journeyId: item.id})}
-            />
-          );
-        }}
-      />
-    </SafeAreaView>
+  const zoneId = selectedZone.id;
+  const touchesZone = useCallback((item: JourneyListItem) => item.trips.some((tr) => tr.zoneId === zoneId), [zoneId]);
+  const touchesOther = useCallback(
+    (item: JourneyListItem) => item.trips.some((tr) => tr.zoneId !== zoneId && tr.zoneId !== NO_ZONE),
+    [zoneId]
   );
-}
 
-function JourneyRow({journey, trips, onPress}: {
-  journey: Journey;
-  trips: Trip[];
-  onPress: () => void;
-}) {
-  if (trips.length === 0) {
-    return (
-      <TouchableOpacity style={styles.row} onPress={onPress}>
-        <Text style={styles.flag}>🏳️</Text>
-        <View style={{flex: 1, marginLeft: 12}}>
-          <Text style={styles.name}>{journey.name}</Text>
-          <Text style={styles.dates}>Нет данных по маршруту</Text>
+  const counts = {
+    all: journeys.length,
+    zone: journeys.filter(touchesZone).length,
+    other: journeys.filter(touchesOther).length,
+  };
+
+  const visible = useMemo(
+    () => journeys.filter((j) => (filter === 'zone' ? touchesZone(j) : filter === 'other' ? touchesOther(j) : true)),
+    [journeys, filter, touchesZone, touchesOther]
+  );
+
+  const daysInZone = useMemo(
+    () => journeys.reduce((acc, j) => acc + j.trips.filter((tr) => tr.zoneId === selectedZone.id)
+      .reduce((s, tr) => s + tripDaysCount(tr), 0), 0),
+    [journeys, selectedZone.id]
+  );
+
+  const footnoteFor = (item: JourneyListItem) => {
+    if (!item.span || item.span.end < summary.windowStart) {
+      return {label: t('history.outsideWindow', {window: rules.windowSizeDays}), tone: 'neutral' as const};
+    }
+    const days = item.trips.filter((tr) => tr.zoneId === selectedZone.id).reduce((s, tr) => s + tripDaysCount(tr), 0);
+    if (days === 0) return undefined;
+    return {label: `${selectedZone.flag} ${zoneLabel.short(selectedZone)} ${days}/${rules.maxStayDays}`, tone: 'safe' as const};
+  };
+
+  const toneFg = toneColors(theme.colors, summary.tone).fg;
+
+  const header = (
+    <View>
+      <View style={styles.titleRow}>
+        <View style={styles.flex}>
+          <Text style={styles.title}>{t('history.title')}</Text>
+          <Text style={styles.subtitle}>
+            {t('history.total', {count: journeys.length})}
+            {'   '}
+            <Text style={styles.subtitleStrong}>
+              {t('history.daysInZone', {count: daysInZone, zone: zoneLabel.short(selectedZone)})}
+            </Text>
+          </Text>
         </View>
-        <Ionicons name="chevron-forward" size={18} color="#4B5563"/>
-      </TouchableOpacity>
-    );
-  }
+        <IconButton icon="share-outline" onPress={() => shareTripsCsv(lang, t('history.export'))} accessibilityLabel={t('history.export')}/>
+      </View>
 
-  const sorted = [...trips].sort(
-    (a, b) => dayjs(a.entryDate).valueOf() - dayjs(b.entryDate).valueOf()
+      <View style={styles.filters}>
+        {([
+          ['all', `${t('common.all')} (${counts.all})`],
+          ['zone', `${selectedZone.flag} ${zoneLabel.short(selectedZone)} (${counts.zone})`],
+          ['other', `${t('history.filterOther')} (${counts.other})`],
+        ] as [Filter, string][]).map(([key, label]) => (
+          <Pressable
+            key={key}
+            style={[styles.filter, filter === key && styles.filterActive]}
+            onPress={() => setFilter(key)}
+            accessibilityRole="tab"
+            accessibilityState={{selected: filter === key}}
+          >
+            <Text style={[styles.filterText, filter === key && styles.filterTextActive]} numberOfLines={1}>{label}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Card style={styles.windowCard}>
+        <View style={styles.windowTop}>
+          <View style={styles.flex}>
+            <Text style={styles.caps}>{t('history.windowCard', {window: rules.windowSizeDays})}</Text>
+            <Text style={styles.windowValue}>
+              {summary.daysUsed}
+              <Text style={styles.windowMax}> / {fmt.days(rules.maxStayDays)}</Text>
+            </Text>
+          </View>
+          <Text style={[styles.status, {color: toneFg}]}>{t(`status.${summary.tone}`)}</Text>
+        </View>
+        <ProgressBar progress={summary.daysUsed / rules.maxStayDays} color={toneFg}/>
+        <View style={styles.windowBottom}>
+          <Text style={styles.muted}>
+            {t('history.remaining')} <Text style={styles.strong}>{fmt.days(summary.daysRemaining)}</Text>
+          </Text>
+          {summary.nextRollOff ? (
+            <Text style={styles.muted}>
+              {t('history.reset')} <Text style={styles.strong}>{fmt.short(summary.nextRollOff)}</Text>
+            </Text>
+          ) : null}
+        </View>
+      </Card>
+
+      <SectionHeader title={t('history.recent')} caption={visible.length > 0 ? t('history.chronology') : undefined}/>
+    </View>
   );
-  const firstEntry = sorted[0].entryDate;
-  const last = sorted[sorted.length - 1];
-  const isOpen = last.exitDate === null;
-  const lastDate = last.exitDate ?? dayjs().format('YYYY-MM-DD');
-  const totalDays = Math.max(1, dayjs(lastDate).diff(dayjs(firstEntry), 'day') + 1);
 
   return (
-    <TouchableOpacity style={styles.row} onPress={onPress}>
-      <Text style={styles.flag}>{journey.originCountryFlag ?? '🧭'}</Text>
-      <View style={{flex: 1, marginLeft: 12}}>
-        <Text style={styles.name}>{journey.name}</Text>
-        <Text style={styles.dates}>
-          {dayjs(firstEntry).format('D MMM YYYY')} —{' '}
-          {isOpen ? 'сейчас' : dayjs(lastDate).format('D MMM YYYY')}
-        </Text>
-      </View>
-      <View style={styles.badge}>
-        <Text style={styles.badgeText}>{totalDays} {daysWord(totalDays)}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={18} color="#4B5563" style={{marginLeft: 8}}/>
-    </TouchableOpacity>
+    <Screen>
+      <AppHeader/>
+      <FlatList
+        data={visible}
+        keyExtractor={(item) => item.journey.id}
+        ListHeaderComponent={header}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        ItemSeparatorComponent={() => <View style={styles.separator}/>}
+        ListEmptyComponent={<EmptyState icon="earth-outline" title={t('history.emptyTitle')} text={t('history.emptyText')}/>}
+        ListFooterComponent={
+          journeys.length > 0 ? (
+            <Button
+              label={t('history.report')}
+              icon="document-text-outline"
+              variant="secondary"
+              onPress={() => navigation.navigate('MainTabs', {screen: 'Reports'})}
+              style={styles.footer}
+            />
+          ) : null
+        }
+        renderItem={({item}) => (
+          <JourneyCard
+            journey={item.journey}
+            trips={item.trips}
+            footnote={footnoteFor(item)}
+            onPress={() => navigation.navigate('JourneyDetail', {journeyId: item.journey.id})}
+          />
+        )}
+      />
+    </Screen>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#0A0A0A'},
-  title: {color: '#FFFFFF', fontSize: 22, fontWeight: '700', paddingHorizontal: 20, marginTop: 8, marginBottom: 12},
-  listContent: {paddingHorizontal: 20, paddingBottom: 40},
-  emptyText: {color: '#6B7280', fontSize: 14, textAlign: 'center', marginTop: 40},
-  row: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#0F0F0F', borderRadius: 14, padding: 14, marginTop: 10,
-  },
-  flag: {fontSize: 28},
-  name: {color: '#FFFFFF', fontSize: 15, fontWeight: '600'},
-  dates: {color: '#9CA3AF', fontSize: 13, marginTop: 2},
-  badge: {backgroundColor: '#1F1F1F', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10},
-  badgeText: {color: '#D1D5DB', fontSize: 12, fontWeight: '600'},
-});
+function createStyles({colors}: AppTheme) {
+  return StyleSheet.create({
+    content: {paddingHorizontal: space.md, paddingBottom: FLOATING_CTA_SPACE + space.lg},
+    flex: {flex: 1},
+    titleRow: {flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.xs},
+    title: {...typography.headlineMd, color: colors.textPrimary},
+    subtitle: {...typography.bodyMd, color: colors.textMuted, marginTop: 2},
+    subtitleStrong: {fontFamily: fonts.bold, color: colors.textPrimary},
+    filters: {flexDirection: 'row', gap: space.sm, marginTop: space.md},
+    filter: {
+      flexShrink: 1, minHeight: 36, justifyContent: 'center', paddingHorizontal: space.gutterSm,
+      borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
+    },
+    filterActive: {backgroundColor: colors.primarySoft, borderColor: colors.accentText},
+    filterText: {...typography.labelMd, fontSize: 13, color: colors.textBody},
+    filterTextActive: {color: colors.accentText, fontFamily: fonts.semibold},
+    windowCard: {marginTop: space.md},
+    windowTop: {flexDirection: 'row', alignItems: 'flex-start', marginBottom: space.md},
+    caps: {...typography.labelCaps, color: colors.textMuted},
+    windowValue: {...typography.headlineLg, color: colors.textPrimary, marginTop: space.xs, ...tabularNums},
+    windowMax: {...typography.bodyMd, color: colors.textMuted},
+    status: {...typography.labelCaps, fontSize: 12},
+    windowBottom: {flexDirection: 'row', justifyContent: 'space-between', marginTop: space.gutterSm},
+    muted: {...typography.bodySm, color: colors.textMuted},
+    strong: {fontFamily: fonts.bold, color: colors.textPrimary},
+    separator: {height: space.gutterSm},
+    footer: {marginTop: space.lg},
+  });
+}

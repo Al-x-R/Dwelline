@@ -1,318 +1,164 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, FlatList } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { ActionSheetIOS, Platform, Alert } from 'react-native';
+import React, { useMemo } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import dayjs from 'dayjs';
 
-import { useTripsStore } from '../store/tripsStore';
-import { useZonesStore } from '../store/zonesStore';
-import { BUILT_IN_ZONES } from '../constants/zones';
-import ProgressRing from '../components/ProgressRing';
-import TripListItem from '../components/TripListItem';
+import { radius, space, tabularNums, typography, fonts, type AppTheme } from '../constants/theme';
+import { countryName } from '../constants/countries';
+import { useAppTheme } from '../hooks/useAppTheme';
+import { useThemedStyles } from '../hooks/useThemedStyles';
+import { useFormatters } from '../hooks/useFormatters';
+import { useZones } from '../hooks/useZones';
+import { useZoneSummary } from '../hooks/useZoneSummary';
+import { useT } from '../i18n';
+import { useRootNavigation } from '../navigation/types';
+import { AppHeader } from '../components/app/AppHeader';
+import { FLOATING_CTA_SPACE } from '../components/app/TabBar';
+import {
+  EmptyState, InfoBanner, Pill, ProgressDial, Screen, SectionHeader, StatTile, toneColors, toneGradient,
+} from '../components/ui';
+import { JourneyCard } from '../features/journey/JourneyCard';
+import { useJourneyList } from '../features/journey/useJourneyList';
+
+const RECENT_LIMIT = 3;
 
 export default function DashboardScreen() {
-    const navigation = useNavigation<any>();
-    const trips = useTripsStore((s) => s.trips);
-    const getCompliance = useTripsStore((s) => s.getCompliance);
-    const getExitDeadline = useTripsStore((s) => s.getExitDeadline);
+  const theme = useAppTheme();
+  const styles = useThemedStyles(createStyles);
+  const navigation = useRootNavigation();
+  const fmt = useFormatters();
+  const {t, lang} = useT();
+  const {selectedZone} = useZones();
+  const summary = useZoneSummary(selectedZone);
+  const journeys = useJourneyList();
 
-    const customZones = useZonesStore((s) => s.customZones);
-    const activeZoneIds = useZonesStore((s) => s.activeZoneIds);
-    const setActiveZoneIds = useZonesStore((s) => s.setActiveZoneIds);
+  const {daysUsed, daysRemaining, tone, rules} = summary;
+  const toneFg = toneColors(theme.colors, tone).fg;
+  const freePercent = Math.round((daysRemaining / rules.maxStayDays) * 100);
 
-    const allZones = useMemo(() => {
-        return [...BUILT_IN_ZONES, ...customZones];
-    }, [customZones]);
+  const zoneJourneys = useMemo(
+    () => journeys.filter((j) => j.trips.some((tr) => tr.zoneId === selectedZone.id)),
+    [journeys, selectedZone.id]
+  );
 
-    const [selectedZoneId, setSelectedZoneId] = useState(activeZoneIds[0] ?? 'schengen');
-    const [zoneModalVisible, setZoneModalVisible] = useState(false);
+  const windowHorizon = summary.fullReset ?? dayjs().add(rules.windowSizeDays, 'day').format('YYYY-MM-DD');
+  const next = summary.nextPlannedTrip;
+  const daysToNext = next ? dayjs(next.entryDate).diff(dayjs().startOf('day'), 'day') : 0;
 
-    const selectedZone = allZones.find((z) => z.id === selectedZoneId);
-    const maxDays = selectedZone?.maxStayDays ?? 90;
+  return (
+    <Screen glow={tone}>
+      <AppHeader/>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.dial}>
+          <ProgressDial progress={daysUsed / rules.maxStayDays} colors={toneGradient(theme, tone)}>
+            <Text style={styles.dialValue} accessibilityLabel={`${daysUsed} / ${rules.maxStayDays}`}>{daysUsed}</Text>
+            <Text style={styles.dialMax}>/ {rules.maxStayDays}</Text>
+            <Pill label={t('dashboard.daysCaps')} tone={tone} caps outlined style={styles.dialPill}/>
+          </ProgressDial>
+        </View>
 
-    const compliance = useMemo(() => getCompliance(selectedZoneId), [trips, selectedZoneId]);
-    const exitDeadline = useMemo(() => getExitDeadline(selectedZoneId), [trips, selectedZoneId]);
+        <View style={[styles.status, {borderColor: theme.colors.border}]}>
+          <View style={[styles.statusOrb, {backgroundColor: toneFg, boxShadow: `0 0 10px ${toneFg}`}]}/>
+          <View style={styles.statusText}>
+            <Text style={[styles.statusTitle, {color: toneFg}]}>{t(`dashboard.statusTitle.${tone}`)}</Text>
+            <Text style={styles.statusSub}>
+              {summary.isViolation
+                ? t('dashboard.overstay', {count: daysUsed - rules.maxStayDays})
+                : t('dashboard.remaining', {count: daysRemaining})}
+            </Text>
+          </View>
+          <View style={styles.freeBox}>
+            <Text style={styles.freeText}>{t('dashboard.free', {percent: freePercent})}</Text>
+          </View>
+        </View>
 
-    const recentTrips = useMemo(() => {
-        return [...trips]
-            .filter((t) => t.zoneId === selectedZoneId)
-            .sort((a, b) => dayjs(b.entryDate).valueOf() - dayjs(a.entryDate).valueOf())
-            .slice(0, 2);
-    }, [trips, selectedZoneId]);
+        {summary.exitDeadline ? (
+          <View style={styles.block}>
+            <InfoBanner
+              icon="warning-outline"
+              tone="warning"
+              title={t('dashboard.exitDeadline')}
+              text={t('dashboard.exitDeadlineText', {date: fmt.full(summary.exitDeadline)})}
+            />
+          </View>
+        ) : null}
 
-    const statusInfo = getStatusInfo(compliance.daysUsed, maxDays, compliance.isViolation);
+        <View style={styles.tiles}>
+          <StatTile
+            label={t('dashboard.currentWindow')}
+            value={fmt.days(rules.windowSizeDays)}
+            caption={t('dashboard.windowUntil', {date: fmt.shortYear(windowHorizon)})}
+            icon="calendar-outline"
+          />
+          <StatTile
+            label={t('dashboard.nextTrip')}
+            value={next ? countryName(next.countryCode, lang) : t('dashboard.notPlanned')}
+            caption={next ? t('dashboard.inDays', {count: daysToNext}) : t('dashboard.limitNotSpent')}
+            captionTone={next ? 'primary' : 'safe'}
+            icon="airplane-outline"
+            tone="safe"
+          />
+        </View>
 
-    const handleSelectZone = async (zoneId: string) => {
-        setSelectedZoneId(zoneId);
-        if (!activeZoneIds.includes(zoneId)) {
-            await setActiveZoneIds([...activeZoneIds, zoneId]);
-        }
-        setZoneModalVisible(false);
-    };
+        {summary.nextRollOff && daysUsed > 0 ? (
+          <Text style={styles.rollOff}>{t('dashboard.nextRollOff', {date: fmt.full(summary.nextRollOff)})}</Text>
+        ) : null}
 
-    const handleFabPress = () => {
-        if (Platform.OS === 'ios') {
-            ActionSheetIOS.showActionSheetWithOptions(
-                {
-                    title: 'Что добавить?',
-                    options: ['Отмена', 'Добавить прошлую поездку', 'Запланировать поездку'],
-                    cancelButtonIndex: 0,
-                    userInterfaceStyle: 'dark',
-                },
-                (buttonIndex) => {
-                    if (buttonIndex === 1) navigation.navigate('AddTrip', { zoneId: selectedZoneId });
-                    if (buttonIndex === 2) navigation.navigate('Forecast', { zoneId: selectedZoneId });
-                }
-            );
-        } else {
-            Alert.alert('Что добавить?', undefined, [
-                { text: 'Прошлую поездку', onPress: () => navigation.navigate('AddTrip', { zoneId: selectedZoneId }) },
-                { text: 'Запланировать поездку', onPress: () => navigation.navigate('Forecast', { zoneId: selectedZoneId }) },
-                { text: 'Отмена', style: 'cancel' },
-            ]);
-        }
-    };
+        <SectionHeader
+          title={t('dashboard.recentTrips')}
+          variant="title"
+          count={zoneJourneys.length}
+          actionLabel={zoneJourneys.length > 0 ? t('common.all') : undefined}
+          onAction={() => navigation.navigate('MainTabs', {screen: 'History'})}
+        />
 
-    const clearTrips = useTripsStore((s) => s.clearTrips);
-
-    return (
-        <SafeAreaView style={styles.container} edges={['top']}>
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                {/* Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity style={styles.iconButton}>
-                        <Ionicons name="menu" size={22} color="#FFFFFF" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.zoneBadge} onPress={() => setZoneModalVisible(true)}>
-                        <Text style={styles.zoneBadgeText}>
-                            {selectedZone?.flag} {selectedZone?.name ?? 'Выбери зону'}
-                        </Text>
-                        <Ionicons name="chevron-down" size={16} color="#9CA3AF" style={{ marginLeft: 6 }} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.iconButton}
-                        onLongPress={() => {
-                            if (!__DEV__) return;
-                            Alert.alert('Сбросить данные?', 'Удалит все поездки (только для разработки)', [
-                                { text: 'Отмена', style: 'cancel' },
-                                { text: 'Сбросить', style: 'destructive', onPress: () => clearTrips() },
-                            ]);
-                        }}
-                    >
-                        <Ionicons name="settings-outline" size={22} color="#FFFFFF" />
-                    </TouchableOpacity>
-                </View>
-
-                {/* Progress Ring */}
-                <View style={styles.ringWrapper}>
-                    <ProgressRing daysUsed={compliance.daysUsed} maxDays={maxDays} />
-                </View>
-
-                {/* Status card */}
-                <View style={[styles.statusCard, { borderColor: statusInfo.color + '55' }]}>
-                    <View style={styles.statusRow}>
-                        <View style={[styles.statusDot, { backgroundColor: statusInfo.color }]} />
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.statusTitle, { color: statusInfo.color }]}>{statusInfo.title}</Text>
-                            <Text style={styles.statusSubtitle}>
-                                Осталось {compliance.daysRemaining} {daysWord(compliance.daysRemaining)} в этом окне
-                            </Text>
-                        </View>
-                    </View>
-                </View>
-
-                {/* Exit deadline */}
-                {exitDeadline && (
-                    <View style={styles.deadlineCard}>
-                        <Ionicons name="warning" size={18} color="#F59E0B" />
-                        <View style={{ marginLeft: 12 }}>
-                            <Text style={styles.deadlineLabel}>СЛЕДУЮЩИЙ ДЕДЛАЙН ВЫЕЗДА</Text>
-                            <Text style={styles.deadlineDate}>{formatDateRu(exitDeadline)}</Text>
-                        </View>
-                    </View>
-                )}
-
-                {/* Recent trips */}
-                <View style={styles.recentHeader}>
-                    <Text style={styles.recentTitle}>Последние поездки</Text>
-                    <TouchableOpacity>
-                        <Text style={styles.recentAll}>Все →</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {recentTrips.length === 0 ? (
-                    <Text style={styles.emptyText}>Поездок пока нет — добавь первую</Text>
-                ) : (
-                    recentTrips.map((trip) => <TripListItem key={trip.id} trip={trip} />)
-                )}
-            </ScrollView>
-
-            {/* FAB */}
-            <TouchableOpacity style={styles.fab} onPress={handleFabPress}>
-                <Ionicons name="add" size={28} color="#FFFFFF" />
-            </TouchableOpacity>
-
-            {/* Модалка выбора зоны */}
-            <Modal visible={zoneModalVisible} animationType="slide" transparent>
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Выбери зону</Text>
-                        <FlatList
-                            data={allZones.filter((z) => z.isImplemented)}
-                            keyExtractor={(item) => item.id}
-                            style={{ maxHeight: 400 }}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity style={styles.zoneRow} onPress={() => handleSelectZone(item.id)}>
-                                    <Text style={styles.zoneFlag}>{item.flag}</Text>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.zoneName}>{item.name}</Text>
-                                        {item.isCustom && <Text style={styles.zoneCustomLabel}>Своя зона</Text>}
-                                    </View>
-                                    {item.id === selectedZoneId && (
-                                        <Ionicons name="checkmark-circle" size={22} color="#3B82F6" />
-                                    )}
-                                </TouchableOpacity>
-                            )}
-                            ListFooterComponent={
-                                <TouchableOpacity
-                                    style={styles.addZoneRow}
-                                    onPress={() => {
-                                        setZoneModalVisible(false);
-                                        navigation.navigate('AddZone');
-                                    }}
-                                >
-                                    <Ionicons name="add-circle-outline" size={22} color="#3B82F6" />
-                                    <Text style={styles.addZoneText}>Добавить свою зону</Text>
-                                </TouchableOpacity>
-                            }
-                        />
-                        <TouchableOpacity style={styles.modalClose} onPress={() => setZoneModalVisible(false)}>
-                            <Text style={styles.modalCloseText}>Закрыть</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
-        </SafeAreaView>
-    );
+        {zoneJourneys.length === 0 ? (
+          <EmptyState
+            icon="compass-outline"
+            title={t('dashboard.emptyTitle')}
+            text={t('dashboard.emptyText')}
+            actionLabel={t('dashboard.calculate')}
+            onAction={() => navigation.navigate('Simulator', {zoneId: selectedZone.id})}
+          />
+        ) : (
+          <View style={styles.list}>
+            {zoneJourneys.slice(0, RECENT_LIMIT).map((item) => (
+              <JourneyCard
+                key={item.journey.id}
+                journey={item.journey}
+                trips={item.trips}
+                onPress={() => navigation.navigate('JourneyDetail', {journeyId: item.journey.id})}
+              />
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </Screen>
+  );
 }
 
-function getStatusInfo(daysUsed: number, maxDays: number, isViolation: boolean) {
-    if (isViolation) return { color: '#EF4444', title: 'Превышен лимит' };
-    const ratio = daysUsed / maxDays;
-    if (ratio >= 0.78) return { color: '#F59E0B', title: 'Приближается лимит' };
-    return { color: '#22C55E', title: 'Всё в порядке' };
+function createStyles({colors, elevation}: AppTheme) {
+  return StyleSheet.create({
+    content: {paddingHorizontal: space.md, paddingBottom: FLOATING_CTA_SPACE + space.lg},
+    dial: {alignItems: 'center', marginVertical: space.lg},
+    dialValue: {...typography.displayHero, fontSize: 88, lineHeight: 96, color: colors.textPrimary, ...tabularNums},
+    dialMax: {...typography.headlineMd, color: colors.textMuted, ...tabularNums},
+    dialPill: {alignSelf: 'center', marginTop: space.sm},
+    status: {
+      flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.lg,
+      borderWidth: 1, backgroundColor: colors.surface, ...elevation.card,
+    },
+    statusOrb: {width: 14, height: 14, borderRadius: radius.full},
+    statusText: {flex: 1},
+    statusTitle: {...typography.headlineSm},
+    statusSub: {...typography.bodyMd, color: colors.textBody, marginTop: 2},
+    freeBox: {
+      paddingHorizontal: space.gutterSm, paddingVertical: space.sm, borderRadius: radius.md,
+      backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, maxWidth: 110,
+    },
+    freeText: {...typography.labelMd, fontFamily: fonts.semibold, color: colors.textBody, ...tabularNums},
+    block: {marginTop: space.md},
+    tiles: {flexDirection: 'row', gap: space.gutterSm, marginTop: space.md},
+    rollOff: {...typography.bodySm, color: colors.textMuted, marginTop: space.gutterSm, textAlign: 'center'},
+    list: {gap: space.gutterSm},
+  });
 }
-
-function daysWord(n: number): string {
-    const mod10 = n % 10;
-    const mod100 = n % 100;
-    if (mod100 >= 11 && mod100 <= 14) return 'дней';
-    if (mod10 === 1) return 'день';
-    if (mod10 >= 2 && mod10 <= 4) return 'дня';
-    return 'дней';
-}
-
-function formatDateRu(dateStr: string): string {
-    const months = [
-        'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-        'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
-    ];
-    const d = dayjs(dateStr);
-    return `${d.date()} ${months[d.month()]} ${d.year()}`;
-}
-
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#0A0A0A' },
-    scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: 12,
-    },
-    iconButton: {
-        width: 40, height: 40, borderRadius: 20,
-        backgroundColor: '#161616',
-        justifyContent: 'center', alignItems: 'center',
-    },
-    zoneBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#161616',
-        paddingHorizontal: 16, paddingVertical: 8,
-        borderRadius: 20,
-    },
-    zoneBadgeText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-    ringWrapper: { alignItems: 'center', marginVertical: 32 },
-    statusCard: {
-        flexDirection: 'row',
-        backgroundColor: '#0F0F0F',
-        borderWidth: 1,
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 12,
-    },
-    statusRow: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-    statusDot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
-    statusTitle: { fontSize: 15, fontWeight: '700' },
-    statusSubtitle: { color: '#9CA3AF', fontSize: 13, marginTop: 2 },
-    deadlineCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#0F0F0F',
-        borderWidth: 1,
-        borderColor: '#F59E0B33',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 24,
-    },
-    deadlineLabel: { color: '#9CA3AF', fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
-    deadlineDate: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginTop: 2 },
-    recentHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    recentTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
-    recentAll: { color: '#3B82F6', fontSize: 14, fontWeight: '600' },
-    emptyText: { color: '#6B7280', fontSize: 14, textAlign: 'center', marginTop: 20 },
-    fab: {
-        position: 'absolute',
-        bottom: 24,
-        alignSelf: 'center',
-        width: 56, height: 56, borderRadius: 28,
-        backgroundColor: '#3B82F6',
-        justifyContent: 'center', alignItems: 'center',
-        shadowColor: '#3B82F6',
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 8,
-    },
-    modalOverlay: { flex: 1, backgroundColor: '#000000AA', justifyContent: 'flex-end' },
-    modalContent: {
-        backgroundColor: '#0F0F0F',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        padding: 20,
-    },
-    modalTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', marginBottom: 16 },
-    modalClose: { alignItems: 'center', paddingVertical: 16, marginTop: 8 },
-    modalCloseText: { color: '#3B82F6', fontSize: 15, fontWeight: '600' },
-    zoneRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
-    zoneFlag: { fontSize: 24, marginRight: 12 },
-    zoneName: { color: '#FFFFFF', fontSize: 16 },
-    zoneCustomLabel: { color: '#6B7280', fontSize: 12, marginTop: 2 },
-    addZoneRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 16,
-        marginTop: 8,
-        borderTopWidth: 1,
-        borderTopColor: '#1F1F1F',
-    },
-    addZoneText: { color: '#3B82F6', fontSize: 15, fontWeight: '600', marginLeft: 10 },
-});

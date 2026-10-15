@@ -7,7 +7,7 @@ const ACTIVE_ZONES_KEY = '@dwelline/active_zone_ids';
 
 interface ZonesState {
     customZones: ZoneConfig[];
-    activeZoneIds: string[]; // какие зоны пользователь реально отслеживает (выбрано на онбординге/настройках)
+    activeZoneIds: string[]; // zones the user actually tracks (chosen during onboarding/settings)
     isLoaded: boolean;
 
     loadZones: () => Promise<void>;
@@ -15,14 +15,14 @@ interface ZonesState {
     deleteCustomZone: (id: string) => Promise<void>;
     setActiveZoneIds: (ids: string[]) => Promise<void>;
 
-    getAllZones: () => ZoneConfig[]; // встроенные + пользовательские вместе
+    getAllZones: () => ZoneConfig[];
     getZone: (id: string) => ZoneConfig | undefined;
-    getActiveZones: () => ZoneConfig[]; // только те, что реально отслеживаются
+    getActiveZones: () => ZoneConfig[];
 }
 
 export const useZonesStore = create<ZonesState>((set, get) => ({
     customZones: [],
-    activeZoneIds: ['schengen'], // по умолчанию хотя бы Шенген, пока не пройден онбординг
+    activeZoneIds: ['schengen'], // at least Schengen by default until onboarding is done
     isLoaded: false,
 
     loadZones: async () => {
@@ -44,13 +44,13 @@ export const useZonesStore = create<ZonesState>((set, get) => ({
         const newZone: ZoneConfig = {
             ...zoneData,
             isCustom: true,
-            isImplemented: true, // пользователь сам ввёл данные — считаем реализованной по его вводу
+            isImplemented: true, // user-entered data — treated as implemented based on their input
         };
         const updated = [...get().customZones, newZone];
         set({ customZones: updated });
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
 
-        // Автоматически активируем только что добавленную зону
+        // Auto-activate the newly added zone
         const updatedActive = [...get().activeZoneIds, newZone.id];
         set({ activeZoneIds: updatedActive });
         await AsyncStorage.setItem(ACTIVE_ZONES_KEY, JSON.stringify(updatedActive));

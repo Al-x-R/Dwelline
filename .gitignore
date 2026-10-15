@@ -43,4 +43,8 @@ yarn-error.*
 # AI agent instructions (local only)
 AGENTS.md
 DESIGN.md
-
+/design
+.idea
+.junie
+.claude
+.expo
