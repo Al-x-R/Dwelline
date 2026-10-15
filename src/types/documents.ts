@@ -10,9 +10,10 @@ export interface PassportRule {
   // All must hold. For visa_required this is the upper bound until the user adds the visa itself.
   constraints: StayRules[];
   requires?: Requirement[];
-  // Official page the rule was checked against; null until verified.
-  source: string | null;
-  verifiedAt: string | null;
+  // Page the rule was checked against: the issuing government's own, or a secondary summary of it.
+  source: string;
+  sourceKind: 'official' | 'secondary';
+  verifiedAt: string;
 }
 
 // A status that lets the holder live in a country: days there don't count toward the zone limit.

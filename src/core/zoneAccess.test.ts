@@ -1,4 +1,4 @@
-import { PASSPORT_RULES } from '../constants/passportRules';
+import { PASSPORT_OVERRIDES, PASSPORT_RULES } from '../constants/passportRules';
 import { BUILT_IN_ZONES, type ZoneConfig } from '../constants/zones';
 import type { Trip } from '../types/Trip';
 import { calculateCompliance, findExitDeadline } from './schengenCalculator';
@@ -37,9 +37,21 @@ describe('resolveZoneAccess', () => {
     });
 
     it('marks missing cells as unknown but keeps the zone default limit', () => {
-        const access = resolveZoneAccess(zone('turkey'), {passports: ['US'], residences: []});
+        const access = resolveZoneAccess(zone('moldova'), {passports: ['AU'], residences: []});
         expect(access.mode).toBe('unknown');
         expect(access.constraints).toHaveLength(1);
+    });
+
+    it('applies single-country overrides before the group rule', () => {
+        expect(resolveZoneAccess(zone('uk'), {passports: ['IE'], residences: []}).mode).toBe('free');
+        expect(resolveZoneAccess(zone('uk'), {passports: ['FR'], residences: []}).requires).toContain('eta');
+        expect(resolveZoneAccess(zone('turkey'), {passports: ['CY'], residences: []}).mode).toBe('visa_required');
+        expect(resolveZoneAccess(zone('turkey'), {passports: ['GR'], residences: []}).mode).toBe('visa_free');
+    });
+
+    it('uses the per-visit limit for Russian passports in Turkey', () => {
+        const [r] = resolveZoneAccess(zone('turkey'), {passports: ['RU'], residences: []}).constraints;
+        expect(r).toMatchObject({kind: 'per_visit', maxStayDays: 60});
     });
 
     it('requires a visa for Russian passports in Schengen', () => {
@@ -138,9 +150,17 @@ describe('month-based visit limit', () => {
 });
 
 describe('PASSPORT_RULES', () => {
+    it('records a source and verification date for every cell', () => {
+        const cells = [...Object.values(PASSPORT_RULES), ...Object.values(PASSPORT_OVERRIDES)].flatMap((c) => Object.values(c ?? {}));
+        for (const cell of cells) {
+            expect(cell!.source).toMatch(/^https:\/\//);
+            expect(cell!.verifiedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        }
+    });
+
     it('has at most one constraint per cell until combined constraints are supported', () => {
-        for (const cells of Object.values(PASSPORT_RULES)) {
-            for (const cell of Object.values(cells)) expect(cell!.constraints.length).toBeLessThanOrEqual(1);
+        for (const cells of [...Object.values(PASSPORT_RULES), ...Object.values(PASSPORT_OVERRIDES)]) {
+            for (const cell of Object.values(cells ?? {})) expect(cell!.constraints.length).toBeLessThanOrEqual(1);
         }
     });
 });

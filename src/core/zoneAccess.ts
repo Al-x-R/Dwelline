@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import type { ZoneConfig } from '../constants/zones';
 import {
   EU_EEA_CODES,
+  PASSPORT_OVERRIDES,
   PASSPORT_RULES,
   passportGroup,
   TEMPORARY_PROTECTION_CODES,
@@ -67,7 +68,7 @@ function passportAccess(zone: ZoneConfig, passport: string): ZoneAccess {
     return {...zoneDefault(zone, 'free'), constraints: [], basis: 'citizen', passport, verified: true};
   }
   const group = passportGroup(passport);
-  const rule = group ? PASSPORT_RULES[group][zone.id] : undefined;
+  const rule = PASSPORT_OVERRIDES[passport]?.[zone.id] ?? (group ? PASSPORT_RULES[group][zone.id] : undefined);
   if (!rule) return {...zoneDefault(zone, 'unknown'), passport};
   return {
     mode: rule.mode,
@@ -76,7 +77,7 @@ function passportAccess(zone: ZoneConfig, passport: string): ZoneAccess {
     basis: 'passport',
     passport,
     exemptions: [],
-    verified: rule.verifiedAt !== null,
+    verified: rule.sourceKind === 'official',
   };
 }
 
