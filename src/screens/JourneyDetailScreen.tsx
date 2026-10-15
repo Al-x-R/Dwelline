@@ -112,7 +112,7 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
   };
 
   return (
-    <Screen glow={worst}>
+    <Screen>
       <ScreenHeader
         onBack={() => navigation.goBack()}
         actions={

@@ -141,7 +141,7 @@ export function MonthGrid({
   );
 }
 
-function createStyles({colors, dark}: AppTheme) {
+function createStyles({colors, elevation}: AppTheme) {
   return StyleSheet.create({
     header: {flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.md},
     title: {...typography.titleMd, color: colors.textPrimary, flex: 1},
@@ -158,14 +158,11 @@ function createStyles({colors, dark}: AppTheme) {
     cell: {width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center'},
     inZone: {backgroundColor: colors.safeSoft},
     today: {borderWidth: 1.5, borderColor: colors.accentText},
-    selected: {
-      backgroundColor: dark ? '#E6E8F0' : colors.primary,
-      boxShadow: dark ? '0 0 16px rgba(192, 193, 255, 0.45)' : '0 4px 12px rgba(67, 56, 202, 0.3)',
-    },
+    selected: {backgroundColor: colors.selectedDay, ...elevation.selectedDay},
     dayText: {...typography.bodyLg, color: colors.textPrimary, ...tabularNums},
     dayInZone: {fontFamily: fonts.bold, color: colors.safe},
     dayRollOff: {color: colors.warning},
     dayMuted: {color: colors.textMuted, opacity: 0.45},
-    daySelected: {fontFamily: fonts.bold, color: dark ? '#0B0F15' : colors.onPrimary},
+    daySelected: {fontFamily: fonts.bold, color: colors.onSelectedDay},
   });
 }

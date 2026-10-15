@@ -48,7 +48,7 @@ export default function DashboardScreen() {
   const daysToNext = next ? dayjs(next.entryDate).diff(dayjs().startOf('day'), 'day') : 0;
 
   return (
-    <Screen glow={tone}>
+    <Screen>
       <AppHeader/>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.access}>

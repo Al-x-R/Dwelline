@@ -61,7 +61,7 @@ export default function CalendarScreen() {
   const statusKey = tone === 'danger' ? 'calendar.violated' : tone === 'warning' ? 'calendar.atRisk' : 'calendar.stable';
 
   return (
-    <Screen glow="primary">
+    <Screen>
       <AppHeader/>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.titleRow}>
@@ -105,7 +105,7 @@ export default function CalendarScreen() {
           <MonthGrid month={month} onChangeMonth={setMonth} selected={selected} markers={markers} onSelect={setSelected}/>
           <View style={styles.legend}>
             <Legend color={theme.colors.safe} label={t('calendar.legendInZone')}/>
-            <Legend color={theme.dark ? '#E6E8F0' : theme.colors.primary} label={t('calendar.legendSelected')}/>
+            <Legend color={theme.colors.selectedDay} label={t('calendar.legendSelected')}/>
             {perVisit || free ? null : <Legend color={theme.colors.warning} label={t('calendar.legendRollOff')}/>}
           </View>
         </Card>

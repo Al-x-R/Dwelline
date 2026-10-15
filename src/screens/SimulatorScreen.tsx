@@ -130,7 +130,7 @@ export default function SimulatorScreen({navigation, route}: Props) {
   const freeDays = Math.max(0, rules.maxStayDays - result.usedBeforeTrip - duration);
 
   return (
-    <Screen glow={tone}>
+    <Screen>
       <ScreenHeader
         onBack={() => navigation.goBack()}
         eyebrow={t('simulator.eyebrow')}

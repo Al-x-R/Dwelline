@@ -31,6 +31,11 @@ export interface ThemeColors {
   onDisabled: string;
   tabActive: string;
   tabInactive: string;
+  // Selected calendar day and its label.
+  selectedDay: string;
+  onSelectedDay: string;
+  // Draggable / indicator knob on bars.
+  knob: string;
 }
 
 export interface ThemeGradients {
@@ -38,6 +43,15 @@ export interface ThemeGradients {
   safe: readonly [string, string];
   danger: readonly [string, string];
   ring: readonly [string, string];
+  // Progress rings / dials by tone.
+  warningRing: readonly [string, string];
+  dangerRing: readonly [string, string];
+  primaryRing: readonly [string, string];
+  // Soft glow at the top of every screen: strongest at the edge, fading to transparent (see layout.ambientStops).
+  ambient: readonly [string, string, string];
+  // Highlight cards: Pro banner in Settings, demo card in onboarding.
+  proCard: readonly [string, string];
+  heroCard: readonly [string, string];
 }
 
 export interface ThemeElevation {
@@ -48,6 +62,8 @@ export interface ThemeElevation {
   focus: ViewStyle;
   safeGlow: ViewStyle;
   dangerGlow: ViewStyle;
+  selectedDay: ViewStyle;
+  knob: ViewStyle;
 }
 
 export interface AppTheme {
@@ -88,6 +104,9 @@ const lightColors: ThemeColors = {
   onDisabled: '#94A3B8',
   tabActive: '#4338CA',
   tabInactive: '#94A3B8',
+  selectedDay: '#4338CA',
+  onSelectedDay: '#FFFFFF',
+  knob: '#FFFFFF',
 };
 
 const darkColors: ThemeColors = {
@@ -121,6 +140,9 @@ const darkColors: ThemeColors = {
   onDisabled: '#5C5F70',
   tabActive: '#4EDEA3',
   tabInactive: '#7D8094',
+  selectedDay: '#E6E8F0',
+  onSelectedDay: '#0B0F15',
+  knob: '#FFFFFF',
 };
 
 export const lightTheme: AppTheme = {
@@ -131,6 +153,12 @@ export const lightTheme: AppTheme = {
     safe: ['#10B981', '#059669'],
     danger: ['#EF4444', '#DC2626'],
     ring: ['#10B981', '#059669'],
+    warningRing: ['#F59E0B', '#FFB95F'],
+    dangerRing: ['#EF4444', '#F87171'],
+    primaryRing: ['#4338CA', '#6366F1'],
+    ambient: ['rgba(79, 70, 229, 0.10)', 'rgba(79, 70, 229, 0.04)', 'rgba(79, 70, 229, 0)'],
+    proCard: ['#EEF0FF', '#ECFDF5'],
+    heroCard: ['#FFFFFF', '#ECFDF5'],
   },
   elevation: {
     card: {boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 16px -4px rgba(15, 23, 42, 0.02)'},
@@ -140,6 +168,8 @@ export const lightTheme: AppTheme = {
     focus: {boxShadow: '0 0 0 3px rgba(79, 70, 229, 0.12)'},
     safeGlow: {},
     dangerGlow: {},
+    selectedDay: {boxShadow: '0 4px 12px rgba(67, 56, 202, 0.3)'},
+    knob: {boxShadow: '0 0 6px rgba(0, 0, 0, 0.35)'},
   },
 };
 
@@ -151,6 +181,12 @@ export const darkTheme: AppTheme = {
     safe: ['#34D399', '#14B8A6'],
     danger: ['#B3121B', '#93000A'],
     ring: ['#10B981', '#34D399'],
+    warningRing: ['#F59E0B', '#FFB95F'],
+    dangerRing: ['#EF4444', '#F87171'],
+    primaryRing: ['#8083FF', '#C0C1FF'],
+    ambient: ['rgba(99, 102, 241, 0.20)', 'rgba(99, 102, 241, 0.07)', 'rgba(99, 102, 241, 0)'],
+    proCard: ['rgba(99, 102, 241, 0.28)', 'rgba(16, 185, 129, 0.14)'],
+    heroCard: ['#1A2030', '#10261F'],
   },
   elevation: {
     card: {},
@@ -160,6 +196,8 @@ export const darkTheme: AppTheme = {
     focus: {boxShadow: '0 0 20px -2px rgba(99, 102, 241, 0.35)'},
     safeGlow: {boxShadow: '0 0 24px -4px rgba(16, 185, 129, 0.35)'},
     dangerGlow: {boxShadow: '0 0 24px -4px rgba(239, 68, 68, 0.35)'},
+    selectedDay: {boxShadow: '0 0 16px rgba(192, 193, 255, 0.45)'},
+    knob: {boxShadow: '0 0 6px rgba(0, 0, 0, 0.35)'},
   },
 };
 
@@ -170,6 +208,12 @@ export const radius = {
   lg: 16,
   xl: 24,
   full: 9999,
+} as const;
+
+export const layout = {
+  // Ambient glow at the top of a screen: height and where its three colours sit.
+  ambientHeight: 480,
+  ambientStops: [0, 0.45, 1] as const,
 } as const;
 
 export const space = {

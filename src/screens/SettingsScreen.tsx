@@ -40,14 +40,14 @@ export default function SettingsScreen({navigation}: Props) {
   const [confirmReset, setConfirmReset] = useState(false);
 
   return (
-    <Screen glow="primary">
+    <Screen>
       <ScreenHeader onBack={() => navigation.goBack()} eyebrow={t('settings.eyebrow')} title={t('settings.title')}/>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.subtitle}>{t('settings.subtitle')}</Text>
 
         <Pressable onPress={() => navigation.navigate('Plans')} accessibilityRole="button" style={({pressed}) => pressed && styles.pressed}>
           <LinearGradient
-            colors={theme.dark ? ['rgba(99,102,241,0.28)', 'rgba(16,185,129,0.14)'] : ['#EEF0FF', '#ECFDF5']}
+            colors={theme.gradients.proCard}
             start={{x: 0, y: 0}}
             end={{x: 1, y: 1}}
             style={styles.pro}

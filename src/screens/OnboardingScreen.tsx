@@ -55,7 +55,7 @@ export default function OnboardingScreen({navigation}: Props) {
   const next = () => (step < STEPS - 1 ? setStep(step + 1) : finish());
 
   return (
-    <Screen glow="primary" edges={['top', 'left', 'right']}>
+    <Screen edges={['top', 'left', 'right']}>
       <View style={styles.top}>
         <Pill label={t('onboarding.badge')} tone="safe" orb caps style={styles.badge}/>
         <Pressable onPress={finish} hitSlop={8} accessibilityRole="button">
@@ -72,7 +72,7 @@ export default function OnboardingScreen({navigation}: Props) {
         {step === 0 ? (
           <>
             <LinearGradient
-              colors={theme.dark ? ['#1A2030', '#10261F'] : ['#FFFFFF', '#ECFDF5']}
+              colors={theme.gradients.heroCard}
               start={{x: 0, y: 0}}
               end={{x: 1, y: 1}}
               style={styles.demo}

@@ -44,7 +44,7 @@ export default function PlansScreen({navigation}: Props) {
   const unavailable = () => Alert.alert(t('plans.unavailableTitle'), t('plans.unavailableText'));
 
   return (
-    <Screen glow="safe" edges={['top', 'left', 'right']}>
+    <Screen edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <IconButton icon="close" onPress={() => navigation.goBack()} accessibilityLabel={t('common.close')}/>
         <View style={styles.headerText}>

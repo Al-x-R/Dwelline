@@ -19,11 +19,11 @@ export function toneColors(colors: ThemeColors, tone: Tone): { fg: string; bg: s
 export function toneGradient(theme: AppTheme, tone: Tone): readonly [string, string] {
   switch (tone) {
     case 'warning':
-      return ['#F59E0B', '#FFB95F'];
+      return theme.gradients.warningRing;
     case 'danger':
-      return ['#EF4444', '#F87171'];
+      return theme.gradients.dangerRing;
     case 'primary':
-      return theme.dark ? ['#8083FF', '#C0C1FF'] : ['#4338CA', '#6366F1'];
+      return theme.gradients.primaryRing;
     default:
       return theme.gradients.ring;
   }
