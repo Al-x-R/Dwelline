@@ -56,9 +56,9 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
       const zone = allZones.find((z) => z.id === id);
       if (!zone) return [];
       const rules = zoneRules(zone);
-      const c = calculateCompliance(allTrips, id, undefined, rules.windowSizeDays, rules.maxStayDays);
+      const c = calculateCompliance(allTrips, id, undefined, rules);
       const withoutJourney = calculateCompliance(
-        allTrips.filter((tr) => !journey?.tripIds.includes(tr.id)), id, undefined, rules.windowSizeDays, rules.maxStayDays
+        allTrips.filter((tr) => !journey?.tripIds.includes(tr.id)), id, undefined, rules
       );
       return [{
         zone,

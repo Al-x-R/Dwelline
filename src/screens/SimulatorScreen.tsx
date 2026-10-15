@@ -7,7 +7,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { radius, space, tabularNums, typography, fonts, type AppTheme } from '../constants/theme';
 import { countryCodeToFlag, countryName } from '../constants/countries';
-import { simulateStay, todayIso, zoneRules } from '../core/zoneAnalytics';
+import { isPerVisit, simulateStay, todayIso, zoneRules } from '../core/zoneAnalytics';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useThemedStyles } from '../hooks/useThemedStyles';
 import { useFormatters } from '../hooks/useFormatters';
@@ -56,6 +56,7 @@ export default function SimulatorScreen({navigation, route}: Props) {
 
   const zone = allZones.find((z) => z.id === zoneId) ?? selectedZone;
   const rules = zoneRules(zone);
+  const perVisit = isPerVisit(rules);
   const zoneChoices = activeZones.some((z) => z.id === zone.id) ? activeZones : [zone, ...activeZones];
 
   // For single-country zones the entry country is obvious.
@@ -278,16 +279,16 @@ export default function SimulatorScreen({navigation, route}: Props) {
         <Card style={styles.block}>
           <View style={styles.cardHeader}>
             <Ionicons name="pulse-outline" size={20} color={theme.colors.accentText}/>
-            <Text style={[styles.cardTitle, styles.flex]}>{t('simulator.dynamics', {window: rules.windowSizeDays})}</Text>
+            <Text style={[styles.cardTitle, styles.flex]}>{perVisit ? t('simulator.visitDynamics') : t('simulator.dynamics', {window: rules.windowSizeDays})}</Text>
             {result.freedDuringTrip > 0 ? (
               <Pill label={t('simulator.gain', {days: fmt.days(result.freedDuringTrip)})} tone="safe" caps/>
             ) : null}
           </View>
-          <Text style={styles.body}>{t('simulator.dynamicsText')}</Text>
+          <Text style={styles.body}>{perVisit ? t('simulator.visitDynamicsText') : t('simulator.dynamicsText')}</Text>
 
           <View style={styles.timeline}>
             <View style={styles.timelineLabels}>
-              <Text style={styles.timelineText}>{t('simulator.windowStart', {date: fmt.short(result.windowStartAtExit)})}</Text>
+              <Text style={styles.timelineText}>{t(perVisit ? 'simulator.visitStart' : 'simulator.windowStart', {date: fmt.short(result.windowStartAtExit)})}</Text>
               <Text style={styles.timelineText}>{t('simulator.entry', {date: fmt.short(result.entryDate)})}</Text>
               <Text style={styles.timelineText}>{t('simulator.exit', {date: fmt.short(result.exitDate)})}</Text>
             </View>
@@ -310,7 +311,7 @@ export default function SimulatorScreen({navigation, route}: Props) {
             </View>
           </View>
 
-          <View style={styles.rollOff}>
+          {perVisit ? null : <View style={styles.rollOff}>
             <View style={styles.rollOffIcon}>
               <Ionicons name="refresh-outline" size={18} color={theme.colors.safe}/>
             </View>
@@ -327,7 +328,7 @@ export default function SimulatorScreen({navigation, route}: Props) {
                   : t('simulator.noRollOff')}
               </Text>
             </View>
-          </View>
+          </View>}
 
           <View style={styles.alertRow}>
             <Ionicons name="notifications-outline" size={20} color={theme.colors.textBody}/>

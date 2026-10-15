@@ -1,8 +1,20 @@
 import dayjs from 'dayjs';
 import type { Trip } from '../types/Trip';
 
-const DEFAULT_WINDOW_SIZE = 180;
-const DEFAULT_MAX_STAY = 90;
+// rolling_window: at most maxStayDays within any windowSizeDays-day period (Schengen 90/180).
+// per_visit: at most maxStayDays of one continuous stay; leaving the zone resets the counter.
+export type StayRuleKind = 'rolling_window' | 'per_visit';
+
+export interface StayRules {
+    kind: StayRuleKind;
+    windowSizeDays: number;
+    maxStayDays: number;
+}
+
+export const SCHENGEN_RULES: StayRules = { kind: 'rolling_window', windowSizeDays: 180, maxStayDays: 90 };
+
+// Searches look this far ahead; must exceed the longest per-visit limit (Georgia, 365 days).
+const SEARCH_HORIZON_DAYS = 800;
 
 function getTripDates(trip: Trip, todayIfOpen: string): string[] {
     const start = dayjs(trip.entryDate);
@@ -40,12 +52,37 @@ export function countDaysInWindow(presence: Set<string>, checkDate: string, wind
     return count;
 }
 
+// Start of the continuous stay that includes checkDate (checkDate itself if not in the zone).
+export function visitStart(presence: Set<string>, checkDate: string): string {
+    let cursor = dayjs(checkDate);
+    while (presence.has(cursor.subtract(1, 'day').format('YYYY-MM-DD'))) cursor = cursor.subtract(1, 'day');
+    return cursor.format('YYYY-MM-DD');
+}
+
+function countVisitDays(presence: Set<string>, checkDate: string): number {
+    if (!presence.has(checkDate)) return 0;
+    return dayjs(checkDate).diff(dayjs(visitStart(presence, checkDate)), 'day') + 1;
+}
+
+// Days counted against the limit on checkDate.
+export function countUsedDays(presence: Set<string>, checkDate: string, rules: StayRules): number {
+    return rules.kind === 'per_visit'
+        ? countVisitDays(presence, checkDate)
+        : countDaysInWindow(presence, checkDate, rules.windowSizeDays);
+}
+
+// First day of the period that daysUsed refers to: the rolling window or the current visit.
+export function usagePeriodStart(presence: Set<string>, checkDate: string, rules: StayRules): string {
+    return rules.kind === 'per_visit'
+        ? visitStart(presence, checkDate)
+        : dayjs(checkDate).subtract(rules.windowSizeDays - 1, 'day').format('YYYY-MM-DD');
+}
+
 export function calculateCompliance(
     trips: Trip[],
     zoneId: string,
     today: string = dayjs().format('YYYY-MM-DD'),
-    windowSizeDays: number = DEFAULT_WINDOW_SIZE,
-    maxStayDays: number = DEFAULT_MAX_STAY
+    rules: StayRules = SCHENGEN_RULES
 ): {
     daysUsed: number;
     daysRemaining: number;
@@ -54,14 +91,13 @@ export function calculateCompliance(
     windowEnd: string;
 } {
     const presence = buildPresenceSet(trips, zoneId, today);
-    const daysUsed = countDaysInWindow(presence, today, windowSizeDays);
-    const windowStart = dayjs(today).subtract(windowSizeDays - 1, 'day').format('YYYY-MM-DD');
+    const daysUsed = countUsedDays(presence, today, rules);
 
     return {
         daysUsed,
-        daysRemaining: Math.max(0, maxStayDays - daysUsed),
-        isViolation: daysUsed > maxStayDays,
-        windowStart,
+        daysRemaining: Math.max(0, rules.maxStayDays - daysUsed),
+        isViolation: daysUsed > rules.maxStayDays,
+        windowStart: usagePeriodStart(presence, today, rules),
         windowEnd: today,
     };
 }
@@ -71,8 +107,7 @@ export function simulateTrip(
     zoneId: string,
     hypotheticalStart: string,
     durationDays: number,
-    windowSizeDays: number = DEFAULT_WINDOW_SIZE,
-    maxStayDays: number = DEFAULT_MAX_STAY
+    rules: StayRules = SCHENGEN_RULES
 ): {
     isViolation: boolean;
     maxOverageDays: number;
@@ -97,11 +132,11 @@ export function simulateTrip(
 
     while (cursor.isBefore(end) || cursor.isSame(end, 'day')) {
         const dateStr = cursor.format('YYYY-MM-DD');
-        const daysUsed = countDaysInWindow(presence, dateStr, windowSizeDays);
-        const overage = daysUsed - maxStayDays;
+        const daysUsed = countUsedDays(presence, dateStr, rules);
+        const overage = daysUsed - rules.maxStayDays;
         if (overage > maxOverage) maxOverage = overage;
 
-        dailyStatus.push({ date: dateStr, daysUsed, isViolation: daysUsed > maxStayDays });
+        dailyStatus.push({ date: dateStr, daysUsed, isViolation: daysUsed > rules.maxStayDays });
         cursor = cursor.add(1, 'day');
     }
 
@@ -116,18 +151,17 @@ export function findExitDeadline(
     trips: Trip[],
     zoneId: string,
     today: string = dayjs().format('YYYY-MM-DD'),
-    windowSizeDays: number = DEFAULT_WINDOW_SIZE,
-    maxStayDays: number = DEFAULT_MAX_STAY
+    rules: StayRules = SCHENGEN_RULES
 ): string | null {
     const hasOpenTrip = trips.some((t) => t.zoneId === zoneId && t.exitDate === null);
     if (!hasOpenTrip) return null;
 
     let cursor = dayjs(today);
-    for (let i = 0; i < 365; i++) {
+    for (let i = 0; i < SEARCH_HORIZON_DAYS; i++) {
         const dateStr = cursor.format('YYYY-MM-DD');
         const presence = buildPresenceSet(trips, zoneId, dateStr);
-        const daysUsed = countDaysInWindow(presence, dateStr, windowSizeDays);
-        if (daysUsed > maxStayDays) {
+        const daysUsed = countUsedDays(presence, dateStr, rules);
+        if (daysUsed > rules.maxStayDays) {
             return cursor.subtract(1, 'day').format('YYYY-MM-DD');
         }
         cursor = cursor.add(1, 'day');
@@ -139,14 +173,13 @@ export function findMaxStayFromDate(
     trips: Trip[],
     zoneId: string,
     startDate: string,
-    windowSizeDays: number = DEFAULT_WINDOW_SIZE,
-    maxStayDays: number = DEFAULT_MAX_STAY
+    rules: StayRules = SCHENGEN_RULES
 ): { date: string; days: number } | null {
     let cursor = dayjs(startDate);
     let lastSafeDate: string | null = null;
     let daysCount = 0;
 
-    for (let i = 0; i < 400; i++) {
+    for (let i = 0; i < SEARCH_HORIZON_DAYS; i++) {
         const dateStr = cursor.format('YYYY-MM-DD');
         const hypotheticalTrip: Trip = {
             id: '__hypothetical__',
@@ -156,9 +189,9 @@ export function findMaxStayFromDate(
             exitDate: dateStr,
         };
         const presence = buildPresenceSet([...trips, hypotheticalTrip], zoneId, dateStr);
-        const daysUsed = countDaysInWindow(presence, dateStr, windowSizeDays);
+        const daysUsed = countUsedDays(presence, dateStr, rules);
 
-        if (daysUsed > maxStayDays) break;
+        if (daysUsed > rules.maxStayDays) break;
 
         lastSafeDate = dateStr;
         daysCount = i + 1;

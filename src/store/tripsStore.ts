@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Trip, ZoneId } from '../types/Trip';
 import { calculateCompliance, findExitDeadline } from '../core/schengenCalculator';
+import { zoneRules } from '../core/zoneAnalytics';
 import { useZonesStore } from './zonesStore';
 
 const STORAGE_KEY = '@dwelline/trips';
@@ -63,16 +64,12 @@ export const useTripsStore = create<TripsState>((set, get) => ({
 
     getCompliance: (zoneId) => {
         const zone = useZonesStore.getState().getZone(zoneId);
-        const windowSizeDays = zone?.windowSizeDays ?? 180;
-        const maxStayDays = zone?.maxStayDays ?? 90;
-        return calculateCompliance(get().trips, zoneId, undefined, windowSizeDays, maxStayDays);
+        return calculateCompliance(get().trips, zoneId, undefined, zoneRules(zone));
     },
 
     getExitDeadline: (zoneId) => {
         const zone = useZonesStore.getState().getZone(zoneId);
-        const windowSizeDays = zone?.windowSizeDays ?? 180;
-        const maxStayDays = zone?.maxStayDays ?? 90;
-        return findExitDeadline(get().trips, zoneId, undefined, windowSizeDays, maxStayDays);
+        return findExitDeadline(get().trips, zoneId, undefined, zoneRules(zone));
     },
 
     addTrips: async (tripsData: (Omit<Trip, 'id'> & { id?: string })[]) => {

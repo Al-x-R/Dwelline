@@ -45,7 +45,9 @@ export function useZoneLabel() {
   );
   const rule = useCallback(
     (zone: ZoneConfig | undefined | null): string =>
-      t('zone.rule', {max: zone?.maxStayDays ?? 90, window: zone?.windowSizeDays ?? 180}),
+      zone?.ruleType === 'per_visit'
+        ? t('zone.rulePerVisit', {max: zone.maxStayDays ?? 90})
+        : t('zone.rule', {max: zone?.maxStayDays ?? 90, window: zone?.windowSizeDays ?? 180}),
     [t]
   );
   return {name, short, rule};

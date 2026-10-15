@@ -8,6 +8,7 @@ import { useAppTheme } from '../hooks/useAppTheme';
 import { useThemedStyles } from '../hooks/useThemedStyles';
 import { useFormatters } from '../hooks/useFormatters';
 import { useZones } from '../hooks/useZones';
+import { isPerVisit } from '../core/zoneAnalytics';
 import { useZoneSummary } from '../hooks/useZoneSummary';
 import { useT } from '../i18n';
 import { useRootNavigation } from '../navigation/types';
@@ -83,12 +84,21 @@ export default function DashboardScreen() {
         ) : null}
 
         <View style={styles.tiles}>
-          <StatTile
-            label={t('dashboard.currentWindow')}
-            value={fmt.days(rules.windowSizeDays)}
-            caption={t('dashboard.windowUntil', {date: fmt.shortYear(windowHorizon)})}
-            icon="calendar-outline"
-          />
+          {isPerVisit(rules) ? (
+            <StatTile
+              label={t('dashboard.perVisitLimit')}
+              value={fmt.days(rules.maxStayDays)}
+              caption={t('dashboard.resetsOnExit')}
+              icon="calendar-outline"
+            />
+          ) : (
+            <StatTile
+              label={t('dashboard.currentWindow')}
+              value={fmt.days(rules.windowSizeDays)}
+              caption={t('dashboard.windowUntil', {date: fmt.shortYear(windowHorizon)})}
+              icon="calendar-outline"
+            />
+          )}
           <StatTile
             label={t('dashboard.nextTrip')}
             value={next ? countryName(next.countryCode, lang) : t('dashboard.notPlanned')}

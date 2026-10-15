@@ -93,8 +93,10 @@ export default function SettingsScreen({navigation}: Props) {
           <ListRow
             icon="calculator-outline"
             iconTone="safe"
-            title={t('settings.window', {rule: zoneLabel.rule(selectedZone)})}
-            subtitle={t('settings.windowHint', {window: selectedZone.windowSizeDays ?? 180})}
+            title={t(selectedZone.ruleType === 'per_visit' ? 'settings.perVisit' : 'settings.window', {rule: zoneLabel.rule(selectedZone)})}
+            subtitle={selectedZone.ruleType === 'per_visit'
+              ? t('settings.perVisitHint')
+              : t('settings.windowHint', {window: selectedZone.windowSizeDays ?? 180})}
           />
           <ListRow
             icon="time-outline"

@@ -1,4 +1,4 @@
-import { calculateCompliance, simulateTrip, findExitDeadline } from './schengenCalculator';
+import { calculateCompliance, simulateTrip, findExitDeadline, type StayRules } from './schengenCalculator';
 import type { Trip } from '../types/Trip';
 
 describe('calculateCompliance', () => {
@@ -99,5 +99,53 @@ describe('findExitDeadline', () => {
         const deadline = findExitDeadline(trips, 'schengen', '2026-01-01');
         // 90th day from Jan 1 = March 31, 2026
         expect(deadline).toBe('2026-03-31');
+    });
+});
+describe('per_visit rules', () => {
+    const georgia: StayRules = { kind: 'per_visit', windowSizeDays: 365, maxStayDays: 365 };
+    const uae: StayRules = { kind: 'per_visit', windowSizeDays: 30, maxStayDays: 30 };
+
+    it('counts only the current continuous stay', () => {
+        const trips: Trip[] = [
+            { id: '1', zoneId: 'uae', countryCode: 'AE', entryDate: '2026-01-01', exitDate: '2026-01-25' },
+            { id: '2', zoneId: 'uae', countryCode: 'AE', entryDate: '2026-02-01', exitDate: null },
+        ];
+        // Feb 1–10 = 10 days; the January visit does not count
+        const result = calculateCompliance(trips, 'uae', '2026-02-10', uae);
+        expect(result.daysUsed).toBe(10);
+        expect(result.windowStart).toBe('2026-02-01');
+    });
+
+    it('returns 0 days used when outside the zone', () => {
+        const trips: Trip[] = [
+            { id: '1', zoneId: 'uae', countryCode: 'AE', entryDate: '2026-01-01', exitDate: '2026-01-25' },
+        ];
+        expect(calculateCompliance(trips, 'uae', '2026-03-01', uae).daysUsed).toBe(0);
+    });
+
+    it('treats back-to-back segments as one visit', () => {
+        const trips: Trip[] = [
+            { id: '1', zoneId: 'uae', countryCode: 'AE', entryDate: '2026-01-01', exitDate: '2026-01-20' },
+            { id: '2', zoneId: 'uae', countryCode: 'AE', entryDate: '2026-01-21', exitDate: '2026-02-05' },
+        ];
+        const result = calculateCompliance(trips, 'uae', '2026-02-05', uae);
+        expect(result.daysUsed).toBe(36);
+        expect(result.isViolation).toBe(true);
+    });
+
+    it('finds the exit deadline beyond one year for a 365-day limit', () => {
+        const trips: Trip[] = [
+            { id: '1', zoneId: 'georgia', countryCode: 'GE', entryDate: '2026-01-01', exitDate: null },
+        ];
+        // Day 365 of the visit is 2026-12-31
+        expect(findExitDeadline(trips, 'georgia', '2026-01-01', georgia)).toBe('2026-12-31');
+    });
+
+    it('allows a full new visit right after leaving', () => {
+        const trips: Trip[] = [
+            { id: '1', zoneId: 'uae', countryCode: 'AE', entryDate: '2026-01-01', exitDate: '2026-01-30' },
+        ];
+        expect(simulateTrip(trips, 'uae', '2026-02-02', 30, uae).isViolation).toBe(false);
+        expect(simulateTrip(trips, 'uae', '2026-02-02', 31, uae).isViolation).toBe(true);
     });
 });

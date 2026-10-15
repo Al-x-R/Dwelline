@@ -9,7 +9,7 @@ import { countryCodeToFlag, countryName } from '../../constants/countries';
 import { NO_ZONE } from '../../constants/zones';
 import type { Trip } from '../../types/Trip';
 import { buildPresenceSet } from '../../core/schengenCalculator';
-import { todayIso, toneFor, tripDaysCount, windowUsage, zoneRules } from '../../core/zoneAnalytics';
+import { isPerVisit, todayIso, toneFor, tripDaysCount, windowUsage, zoneRules } from '../../core/zoneAnalytics';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useThemedStyles } from '../../hooks/useThemedStyles';
 import { useFormatters } from '../../hooks/useFormatters';
@@ -115,7 +115,7 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
       used: usage.daysUsed,
       max: rules.maxStayDays,
       remaining: fmt.days(usage.daysRemaining),
-      windowReset: lastInZone ? fmt.dayMonth(dayjs(lastInZone).add(rules.windowSizeDays, 'day')) : null,
+      windowReset: lastInZone && !isPerVisit(rules) ? fmt.dayMonth(dayjs(lastInZone).add(rules.windowSizeDays, 'day')) : null,
       rows,
     };
   }, [draftTrips, otherTrips, allZones, selectedZone, zoneLabel, buffer, fmt, t, theme.colors.textMuted]);

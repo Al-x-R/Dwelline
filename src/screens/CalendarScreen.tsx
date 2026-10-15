@@ -14,7 +14,7 @@ import { useT } from '../i18n';
 import { useRootNavigation } from '../navigation/types';
 import { useTripsStore } from '../store/tripsStore';
 import { useSettingsStore } from '../store/settingsStore';
-import { dayInfo, presenceFor, todayIso, toneFor, tripDaysCount, windowUsage } from '../core/zoneAnalytics';
+import { dayInfo, isPerVisit, presenceFor, todayIso, toneFor, tripDaysCount, windowUsage } from '../core/zoneAnalytics';
 import { AppHeader } from '../components/app/AppHeader';
 import { FLOATING_CTA_SPACE } from '../components/app/TabBar';
 import { MonthGrid } from '../components/calendar/MonthGrid';
@@ -38,11 +38,12 @@ export default function CalendarScreen() {
 
   const presence = useMemo(() => presenceFor(trips, selectedZone.id), [trips, selectedZone.id]);
   const markers = useCallback(
-    (date: string) => dayInfo(presence, date, rules.windowSizeDays),
-    [presence, rules.windowSizeDays]
+    (date: string) => dayInfo(presence, date, rules),
+    [presence, rules]
   );
   const usage = useMemo(() => windowUsage(presence, selected, rules), [presence, selected, rules]);
   const tone = toneFor(usage.daysUsed, rules.maxStayDays, buffer);
+  const perVisit = isPerVisit(rules);
   const toneFg = toneColors(theme.colors, tone).fg;
 
   const monthTrips = useMemo(() => {
@@ -93,14 +94,14 @@ export default function CalendarScreen() {
           <View style={styles.legend}>
             <Legend color={theme.colors.safe} label={t('calendar.legendInZone')}/>
             <Legend color={theme.dark ? '#E6E8F0' : theme.colors.primary} label={t('calendar.legendSelected')}/>
-            <Legend color={theme.colors.warning} label={t('calendar.legendRollOff')}/>
+            {perVisit ? null : <Legend color={theme.colors.warning} label={t('calendar.legendRollOff')}/>}
           </View>
         </Card>
 
         <Card style={styles.block}>
           <View style={styles.windowHeader}>
             <Ionicons name="time-outline" size={20} color={theme.colors.textPrimary}/>
-            <Text style={styles.windowTitle}>{t('calendar.windowTitle', {window: rules.windowSizeDays})}</Text>
+            <Text style={styles.windowTitle}>{perVisit ? t('calendar.visitTitle') : t('calendar.windowTitle', {window: rules.windowSizeDays})}</Text>
             <Pill
               label={usage.isViolation ? t('calendar.failed') : t('calendar.passed')}
               tone={usage.isViolation ? 'danger' : 'safe'}
@@ -133,7 +134,9 @@ export default function CalendarScreen() {
               <Text style={styles.muted}>{t('calendar.fullResetText')}</Text>
             </>
           ) : (
-            <Text style={styles.body}>{t('calendar.noTripsInWindow')}</Text>
+            <Text style={styles.body}>
+              {perVisit ? t('calendar.perVisitText', {max: rules.maxStayDays}) : t('calendar.noTripsInWindow')}
+            </Text>
           )}
         </Card>
 
