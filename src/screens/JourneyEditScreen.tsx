@@ -8,12 +8,12 @@ import { useTripsStore } from '../store/tripsStore';
 import { EmptyState, Screen, ScreenHeader } from '../components/ui';
 import { JourneyForm } from '../features/journey/JourneyForm';
 import { journeyTrips } from '../features/journey/journeyUtils';
-import { buildJourneyFields, draftFromJourney, emptyPoint } from '../features/journey/useJourneyDraft';
+import { buildJourneyFields, draftFromJourney } from '../features/journey/useJourneyDraft';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'JourneyEdit'>;
 
 export default function JourneyEditScreen({navigation, route}: Props) {
-  const {journeyId, addSegment} = route.params;
+  const {journeyId} = route.params;
   const {t, lang} = useT();
   const journey = useJourneysStore((s) => s.getJourney(journeyId));
   const updateJourney = useJourneysStore((s) => s.updateJourney);
@@ -24,10 +24,7 @@ export default function JourneyEditScreen({navigation, route}: Props) {
   const tripIds = useMemo(() => trips.map((tr) => tr.id), [trips]);
 
   // The form calls the factory only on mount, so the draft isn't reset when the store updates.
-  const initialDraft = () => {
-    const draft = draftFromJourney(journey!, trips);
-    return addSegment ? {...draft, points: [...draft.points, emptyPoint()]} : draft;
-  };
+  const initialDraft = () => draftFromJourney(journey!, trips);
 
   if (!journey) {
     return (

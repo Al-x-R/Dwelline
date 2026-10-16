@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, Share, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -20,7 +19,7 @@ import { useTripsStore } from '../store/tripsStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { deleteJourneyWithTrips } from '../store/actions';
 import {
-  Button, Card, ConfirmDialog, EmptyState, FlagBadge, IconButton, InfoBanner, Pill, Screen, ScreenHeader, SectionHeader,
+  Card, ConfirmDialog, EmptyState, FlagBadge, IconButton, InfoBanner, Pill, Screen, ScreenHeader, SectionHeader,
 } from '../components/ui';
 import { ZoneStatusCard } from '../features/zone/ZoneStatusCard';
 import {
@@ -51,7 +50,6 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
   const docs = useTravelDocuments();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [posterOpen, setPosterOpen] = useState(false);
 
   const trips = useMemo(() => (journey ? journeyTrips(journey, allTrips) : []), [journey, allTrips]);
   const span = journeySpan(trips);
@@ -95,15 +93,6 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
   const origin = journeyOrigin(journey, lang);
   const primaryZone = zoneStatuses.find((z) => z.zone.id === selectedZone.id) ?? zoneStatuses[0];
   const datesLabel = span ? `${fmt.shortYear(span.start)} — ${span.isOpen ? t('common.now') : fmt.shortYear(span.end)}` : '';
-
-  const handleShare = () =>
-    Share.share({
-      message: t('journey.shareText', {
-        name: journey.name,
-        dates: datesLabel,
-        days: span ? fmt.days(span.days) : '',
-      }),
-    });
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -182,8 +171,6 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
                     subtitle={datesLabel || undefined}
                     badge={span ? fmt.days(span.days) : undefined}
                     status={zoneStatuses.length ? {label: t(`journey.engine.${worst}`), tone: worst} : undefined}
-                    open={posterOpen}
-                    onOpenChange={setPosterOpen}
                   />
                 </View>
               </>
@@ -274,21 +261,6 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
         )}
       </ScrollView>
 
-      <SafeAreaView edges={['bottom']} style={styles.footer}>
-        <IconButton
-          icon="share-social-outline"
-          onPress={() => (nodes.length > 1 ? setPosterOpen(true) : handleShare())}
-          accessibilityLabel={t('common.share')}
-        />
-        <Button
-          label={t('journey.addSegment')}
-          icon="add"
-          variant="safe"
-          onPress={() => navigation.navigate('JourneyEdit', {journeyId, addSegment: true})}
-          style={styles.flex}
-        />
-      </SafeAreaView>
-
       <ConfirmDialog
         visible={confirmDelete}
         icon="trash-outline"
@@ -325,7 +297,6 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
 function createStyles({colors}: AppTheme) {
   return StyleSheet.create({
     content: {paddingHorizontal: space.md, paddingBottom: space.xl},
-    flex: {flex: 1},
     metaRow: {flexDirection: 'row', alignItems: 'center', gap: space.gutterSm},
     id: {...typography.labelMd, color: colors.textMuted},
     title: {...typography.headlineXl, color: colors.textPrimary, marginTop: space.sm},
@@ -352,10 +323,5 @@ function createStyles({colors}: AppTheme) {
     daysText: {...typography.labelMd, fontFamily: fonts.bold, color: colors.textPrimary, ...tabularNums},
     daysTextMain: {color: colors.safe},
     block: {marginTop: space.lg},
-    footer: {
-      flexDirection: 'row', alignItems: 'center', gap: space.gutterSm, paddingHorizontal: space.md,
-      paddingTop: space.gutterSm, paddingBottom: space.sm, backgroundColor: colors.canvas,
-      borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderStrong,
-    },
   });
 }

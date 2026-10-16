@@ -179,7 +179,6 @@ const uk: Record<TranslationKey, TranslationValue> = {
   'journey.engine.warningText': 'В одній із зон залишилось менше днів, ніж ваш буфер безпеки.',
   'journey.engine.danger': 'Ліміт перевищено',
   'journey.engine.dangerText': 'В одній із зон перевищено допустиму кількість днів у вікні.',
-  'journey.addSegment': 'Додати відрізок',
   'journey.notFound': 'Поїздку не знайдено',
   'journey.noSegments': 'Усі відрізки маршруту видалено',
   'journey.deleteTitle': 'Видалити цю поїздку?',
@@ -188,7 +187,6 @@ const uk: Record<TranslationKey, TranslationValue> = {
   'journey.deleteImpact': 'Звільниться +{days} у розрахунковому коридорі {zone}',
   'journey.deleteFootnote': 'Відновити дані маршруту буде неможливо.',
   'journey.deleteConfirm': 'Видалити поїздку',
-  'journey.shareText': '{name}: {dates}, {days}',
   'journey.edit': 'Редагувати',
 
   'form.eyebrow': 'Маршрутизатор',

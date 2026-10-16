@@ -7,7 +7,7 @@ export type RootStackParamList = {
   Simulator: { zoneId?: string } | undefined;
   AddTrip: undefined;
   JourneyDetail: { journeyId: string };
-  JourneyEdit: { journeyId: string; addSegment?: boolean };
+  JourneyEdit: { journeyId: string };
   Settings: undefined;
   Language: undefined;
   Plans: undefined;

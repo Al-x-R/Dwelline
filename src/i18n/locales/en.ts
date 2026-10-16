@@ -167,7 +167,6 @@ const en: Record<TranslationKey, TranslationValue> = {
   'journey.engine.warningText': 'One of the zones has fewer days left than your safety buffer.',
   'journey.engine.danger': 'Limit exceeded',
   'journey.engine.dangerText': 'One of the zones exceeds the allowed number of days in the window.',
-  'journey.addSegment': 'Add segment',
   'journey.notFound': 'Trip not found',
   'journey.noSegments': 'All route segments were removed',
   'journey.deleteTitle': 'Delete this trip?',
@@ -176,7 +175,6 @@ const en: Record<TranslationKey, TranslationValue> = {
   'journey.deleteImpact': '+{days} will be freed in the {zone} corridor',
   'journey.deleteFootnote': 'Route data cannot be restored.',
   'journey.deleteConfirm': 'Delete trip',
-  'journey.shareText': '{name}: {dates}, {days}',
   'journey.edit': 'Edit',
 
   'form.eyebrow': 'Route builder',

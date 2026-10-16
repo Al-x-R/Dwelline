@@ -174,7 +174,6 @@ const ru = {
   'journey.engine.warningText': 'В одной из зон осталось меньше дней, чем ваш буфер безопасности.',
   'journey.engine.danger': 'Лимит превышен',
   'journey.engine.dangerText': 'В одной из зон превышено допустимое число дней в окне.',
-  'journey.addSegment': 'Добавить отрезок',
   'journey.notFound': 'Поездка не найдена',
   'journey.noSegments': 'Все отрезки маршрута удалены',
   'journey.deleteTitle': 'Удалить эту поездку?',
@@ -183,7 +182,6 @@ const ru = {
   'journey.deleteImpact': 'Освободится +{days} в расчётном коридоре {zone}',
   'journey.deleteFootnote': 'Восстановить данные маршрута будет невозможно.',
   'journey.deleteConfirm': 'Удалить поездку',
-  'journey.shareText': '{name}: {dates}, {days}',
   'journey.edit': 'Редактировать',
 
   'form.eyebrow': 'Маршрутизатор',
