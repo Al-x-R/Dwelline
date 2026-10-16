@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import Slider from '@react-native-community/slider';
 import dayjs from 'dayjs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -18,7 +19,7 @@ import { useJourneysStore } from '../store/journeysStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useTripsStore } from '../store/tripsStore';
 import {
-  Button, Card, InfoBanner, Pill, ProgressBar, ProgressDial, Screen, ScreenHeader, SegmentedControl, SelectField,
+  Button, Card, InfoBanner, Pill, ProgressBar, ProgressDial, Screen, ScreenHeader, SelectField,
   Toggle, toneColors, toneGradient, type Tone,
 } from '../components/ui';
 import { CountryPickerSheet } from '../components/app/CountryPickerSheet';
@@ -27,10 +28,10 @@ import { DateRangeSheet } from '../components/calendar/DateRangeSheet';
 import { makeId } from '../features/journey/useJourneyDraft';
 import { ZoneAccessBanner } from '../features/zone/ZoneAccessBanner';
 import { useZoneContext } from '../hooks/useZoneContext';
+import { sortZonesByRelevance } from '../features/zone/zoneRelevance';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Simulator'>;
 
-const DEFAULT_OFFSET_DAYS = 7;
 const DEFAULT_DURATION = 30;
 const STEP = 1;
 
@@ -42,12 +43,14 @@ export default function SimulatorScreen({navigation, route}: Props) {
   const {activeZones, allZones, selectedZone} = useZones();
   const zoneLabel = useZoneLabel();
   const addTrips = useTripsStore((s) => s.addTrips);
+  const allTrips = useTripsStore((s) => s.trips);
   const addJourney = useJourneysStore((s) => s.addJourney);
   const buffer = useSettingsStore((s) => s.safetyBufferDays);
   const overstayAlerts = useSettingsStore((s) => s.overstayAlerts);
   const setAlerts = useSettingsStore((s) => s.setAlerts);
 
-  const defaultEntry = dayjs().add(DEFAULT_OFFSET_DAYS, 'day').format('YYYY-MM-DD');
+  // The simulation starts today: "what if I enter now" is the question most people come with.
+  const defaultEntry = todayIso();
   const [zoneId, setZoneId] = useState(route.params?.zoneId ?? selectedZone.id);
   const [entry, setEntry] = useState(defaultEntry);
   const [duration, setDuration] = useState(DEFAULT_DURATION);
@@ -61,7 +64,11 @@ export default function SimulatorScreen({navigation, route}: Props) {
   const rules = ctx.rules;
   const perVisit = isPerVisit(rules);
   const free = ctx.access.mode === 'free';
-  const zoneChoices = activeZones.some((z) => z.id === zone.id) ? activeZones : [zone, ...activeZones];
+  // Where the user is or is going first, so the likely zone is visible without scrolling.
+  const zoneChoices = useMemo(
+    () => sortZonesByRelevance(activeZones.some((z) => z.id === zone.id) ? activeZones : [zone, ...activeZones], allTrips, todayIso()),
+    [activeZones, zone, allTrips]
+  );
 
   // For single-country zones the entry country is obvious.
   const countryCode =
@@ -136,7 +143,8 @@ export default function SimulatorScreen({navigation, route}: Props) {
         onBack={() => navigation.goBack()}
         eyebrow={t('simulator.eyebrow')}
         title={t('simulator.title')}
-        actions={<Pill label={t('simulator.active', {zone: zoneLabel.short(zone), rule: zoneLabel.rule(zone)})} tone="safe" orb/>}
+        // Compact: the flag says which zone, the zone itself is picked below.
+        actions={<Pill label={`${zone.flag} ${zoneLabel.rule(zone)}`} tone="safe" orb/>}
       />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.subtitle}>{t('simulator.subtitle', {rule: zoneLabel.rule(zone)})}</Text>
@@ -220,8 +228,8 @@ export default function SimulatorScreen({navigation, route}: Props) {
           </View>
 
           <Text style={styles.label}>{t('simulator.jurisdiction')}</Text>
-          <SegmentedControl
-            options={zoneChoices.map((z) => ({value: z.id, label: `${zoneLabel.short(z)}`}))}
+          <ZoneChips
+            zones={zoneChoices.map((z) => ({id: z.id, flag: z.flag, label: zoneLabel.short(z)}))}
             value={zone.id}
             onChange={(id) => {
               setZoneId(id);
@@ -240,7 +248,9 @@ export default function SimulatorScreen({navigation, route}: Props) {
             </View>
             <View style={styles.flex}>
               <Text style={styles.dateValue}>{fmt.short(entry)} — {fmt.shortYear(exitDate)}</Text>
-              <Text style={styles.muted}>{fmt.weekday(entry)} • {t('common.days', {count: duration})}</Text>
+              <Text style={styles.muted}>
+                {entry === todayIso() ? t('simulator.fromToday') : fmt.weekday(entry)} • {t('common.days', {count: duration})}
+              </Text>
             </View>
             <Text style={styles.link}>{t('common.edit')}</Text>
             <Ionicons name="chevron-forward" size={16} color={theme.colors.accentText}/>
@@ -418,6 +428,73 @@ function Legend({color, label, value}: { color: string; label: string; value: st
   );
 }
 
+interface ZoneChip {
+  id: string;
+  flag: string;
+  label: string;
+}
+
+const FADE_WIDTH = 32;
+
+// Horizontally scrolling zone chips with full names; the selected one is scrolled into view on open.
+// Edge fades show there is more to scroll: right while not at the end, left once scrolled.
+function ZoneChips({zones, value, onChange}: { zones: ZoneChip[]; value: string; onChange: (id: string) => void }) {
+  const theme = useAppTheme();
+  const styles = useThemedStyles(createStyles);
+  const scrollRef = useRef<ScrollView>(null);
+  const scrolled = useRef(false);
+  const [viewWidth, setViewWidth] = useState(0);
+  const [contentWidth, setContentWidth] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const showLeft = offset > 4;
+  const showRight = contentWidth - viewWidth - offset > 4;
+  // Fade from the card colour to fully transparent (#RRGGBB → #RRGGBB00).
+  const solid = theme.colors.surface;
+  const clear = `${solid}00`;
+
+  return (
+    <View style={styles.zoneChipsScroll}>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.zoneChips}
+        onLayout={(e) => setViewWidth(e.nativeEvent.layout.width)}
+        onContentSizeChange={(w) => setContentWidth(w)}
+        onScroll={(e) => setOffset(e.nativeEvent.contentOffset.x)}
+        scrollEventThrottle={32}
+      >
+        {zones.map((z) => {
+          const active = z.id === value;
+          return (
+            <Pressable
+              key={z.id}
+              onPress={() => onChange(z.id)}
+              onLayout={(e) => {
+                if (!active || scrolled.current) return;
+                scrolled.current = true;
+                scrollRef.current?.scrollTo({x: Math.max(0, e.nativeEvent.layout.x - space.md), animated: false});
+              }}
+              style={({pressed}) => [styles.zoneChip, active && styles.zoneChipActive, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityState={{selected: active}}
+            >
+              <Text style={styles.zoneChipFlag}>{z.flag}</Text>
+              <Text style={[styles.zoneChipText, active && styles.zoneChipTextActive]} numberOfLines={1}>{z.label}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+      {showLeft ? (
+        <LinearGradient colors={[solid, clear]} start={{x: 0, y: 0}} end={{x: 1, y: 0}} style={[styles.fade, styles.fadeLeft]} pointerEvents="none"/>
+      ) : null}
+      {showRight ? (
+        <LinearGradient colors={[clear, solid]} start={{x: 0, y: 0}} end={{x: 1, y: 0}} style={[styles.fade, styles.fadeRight]} pointerEvents="none"/>
+      ) : null}
+    </View>
+  );
+}
+
 function createStyles({colors}: AppTheme) {
   return StyleSheet.create({
     content: {paddingHorizontal: space.md, paddingBottom: space.xl},
@@ -448,6 +525,20 @@ function createStyles({colors}: AppTheme) {
     resetText: {...typography.labelMd, color: colors.textBody},
     label: {...typography.labelCaps, color: colors.textMuted, marginBottom: space.sm},
     labelGap: {marginTop: space.md},
+    // Chips run to the card edges so the scroll doesn't look clipped.
+    zoneChipsScroll: {marginHorizontal: -space.md},
+    fade: {position: 'absolute', top: 0, bottom: 0, width: FADE_WIDTH},
+    fadeLeft: {left: 0},
+    fadeRight: {right: 0},
+    zoneChips: {gap: space.sm, paddingHorizontal: space.md},
+    zoneChip: {
+      flexDirection: 'row', alignItems: 'center', gap: space.xs + 2, height: 40, paddingHorizontal: space.gutterSm,
+      borderRadius: radius.full, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border,
+    },
+    zoneChipActive: {backgroundColor: colors.primary, borderColor: colors.primary},
+    zoneChipFlag: {fontSize: 16},
+    zoneChipText: {...typography.labelMd, fontSize: 14, color: colors.textBody},
+    zoneChipTextActive: {color: colors.onPrimary, fontFamily: fonts.semibold},
     dateRow: {
       flexDirection: 'row', alignItems: 'center', gap: space.gutterSm, padding: space.gutterSm,
       borderRadius: radius.md, backgroundColor: colors.surfaceElevated,
