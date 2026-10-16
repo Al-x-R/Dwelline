@@ -26,7 +26,7 @@ export function ProgressBar({progress = 0, color, segments, height = 8, thumb = 
     <View style={[styles.track, {height, backgroundColor: theme.colors.track}]}>
       <View style={[styles.fill, {width: `${total * 100}%`}]}>
         {parts.map((p, i) => (
-          <View key={i} style={{flex: p.value, backgroundColor: p.color}}/>
+          <View key={i} style={{flexGrow: total > 0 ? p.value / total : 0, flexBasis: 0, backgroundColor: p.color}}/>
         ))}
       </View>
       {thumb && total > 0 ? (
