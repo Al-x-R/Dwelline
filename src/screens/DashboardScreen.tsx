@@ -8,6 +8,7 @@ import { useAppTheme } from '../hooks/useAppTheme';
 import { useThemedStyles } from '../hooks/useThemedStyles';
 import { useFormatters } from '../hooks/useFormatters';
 import { useZones } from '../hooks/useZones';
+import { isPerVisit } from '../core/zoneAnalytics';
 import { useZoneSummary } from '../hooks/useZoneSummary';
 import { useT } from '../i18n';
 import { useRootNavigation } from '../navigation/types';
@@ -18,6 +19,7 @@ import {
 } from '../components/ui';
 import { JourneyCard } from '../features/journey/JourneyCard';
 import { useJourneyList } from '../features/journey/useJourneyList';
+import { ZoneAccessBanner } from '../features/zone/ZoneAccessBanner';
 
 const RECENT_LIMIT = 3;
 
@@ -32,6 +34,7 @@ export default function DashboardScreen() {
   const journeys = useJourneyList();
 
   const {daysUsed, daysRemaining, tone, rules} = summary;
+  const free = summary.access.mode === 'free';
   const toneFg = toneColors(theme.colors, tone).fg;
   const freePercent = Math.round((daysRemaining / rules.maxStayDays) * 100);
 
@@ -45,50 +48,67 @@ export default function DashboardScreen() {
   const daysToNext = next ? dayjs(next.entryDate).diff(dayjs().startOf('day'), 'day') : 0;
 
   return (
-    <Screen glow={tone}>
+    <Screen>
       <AppHeader/>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.dial}>
-          <ProgressDial progress={daysUsed / rules.maxStayDays} colors={toneGradient(theme, tone)}>
-            <Text style={styles.dialValue} accessibilityLabel={`${daysUsed} / ${rules.maxStayDays}`}>{daysUsed}</Text>
-            <Text style={styles.dialMax}>/ {rules.maxStayDays}</Text>
-            <Pill label={t('dashboard.daysCaps')} tone={tone} caps outlined style={styles.dialPill}/>
-          </ProgressDial>
+        <View style={styles.access}>
+          <ZoneAccessBanner zone={selectedZone} access={summary.access} promptPassport showRequirements/>
         </View>
 
-        <View style={[styles.status, {borderColor: theme.colors.border}]}>
-          <View style={[styles.statusOrb, {backgroundColor: toneFg, boxShadow: `0 0 10px ${toneFg}`}]}/>
-          <View style={styles.statusText}>
-            <Text style={[styles.statusTitle, {color: toneFg}]}>{t(`dashboard.statusTitle.${tone}`)}</Text>
-            <Text style={styles.statusSub}>
-              {summary.isViolation
-                ? t('dashboard.overstay', {count: daysUsed - rules.maxStayDays})
-                : t('dashboard.remaining', {count: daysRemaining})}
-            </Text>
-          </View>
-          <View style={styles.freeBox}>
-            <Text style={styles.freeText}>{t('dashboard.free', {percent: freePercent})}</Text>
-          </View>
-        </View>
+        {free ? null : (
+          <>
+            <View style={styles.dial}>
+              <ProgressDial progress={daysUsed / rules.maxStayDays} colors={toneGradient(theme, tone)}>
+                <Text style={styles.dialValue} accessibilityLabel={`${daysUsed} / ${rules.maxStayDays}`}>{daysUsed}</Text>
+                <Text style={styles.dialMax}>/ {rules.maxStayDays}</Text>
+                <Pill label={t('dashboard.daysCaps')} tone={tone} caps outlined style={styles.dialPill}/>
+              </ProgressDial>
+            </View>
 
-        {summary.exitDeadline ? (
-          <View style={styles.block}>
-            <InfoBanner
-              icon="warning-outline"
-              tone="warning"
-              title={t('dashboard.exitDeadline')}
-              text={t('dashboard.exitDeadlineText', {date: fmt.full(summary.exitDeadline)})}
-            />
-          </View>
-        ) : null}
+            <View style={[styles.status, {borderColor: theme.colors.border}]}>
+              <View style={[styles.statusOrb, {backgroundColor: toneFg, boxShadow: `0 0 10px ${toneFg}`}]}/>
+              <View style={styles.statusText}>
+                <Text style={[styles.statusTitle, {color: toneFg}]}>{t(`dashboard.statusTitle.${tone}`)}</Text>
+                <Text style={styles.statusSub}>
+                  {summary.isViolation
+                    ? t('dashboard.overstay', {count: daysUsed - rules.maxStayDays})
+                    : t('dashboard.remaining', {count: daysRemaining})}
+                </Text>
+              </View>
+              <View style={styles.freeBox}>
+                <Text style={styles.freeText}>{t('dashboard.free', {percent: freePercent})}</Text>
+              </View>
+            </View>
+
+            {summary.exitDeadline ? (
+              <View style={styles.block}>
+                <InfoBanner
+                  icon="warning-outline"
+                  tone="warning"
+                  title={t('dashboard.exitDeadline')}
+                  text={t('dashboard.exitDeadlineText', {date: fmt.full(summary.exitDeadline)})}
+                />
+              </View>
+            ) : null}
+          </>
+        )}
 
         <View style={styles.tiles}>
-          <StatTile
-            label={t('dashboard.currentWindow')}
-            value={fmt.days(rules.windowSizeDays)}
-            caption={t('dashboard.windowUntil', {date: fmt.shortYear(windowHorizon)})}
-            icon="calendar-outline"
-          />
+          {free ? null : isPerVisit(rules) ? (
+            <StatTile
+              label={t('dashboard.perVisitLimit')}
+              value={fmt.days(rules.maxStayDays)}
+              caption={t('dashboard.resetsOnExit')}
+              icon="calendar-outline"
+            />
+          ) : (
+            <StatTile
+              label={t('dashboard.currentWindow')}
+              value={fmt.days(rules.windowSizeDays)}
+              caption={t('dashboard.windowUntil', {date: fmt.shortYear(windowHorizon)})}
+              icon="calendar-outline"
+            />
+          )}
           <StatTile
             label={t('dashboard.nextTrip')}
             value={next ? countryName(next.countryCode, lang) : t('dashboard.notPlanned')}
@@ -158,6 +178,7 @@ function createStyles({colors, elevation}: AppTheme) {
     freeText: {...typography.labelMd, fontFamily: fonts.semibold, color: colors.textBody, ...tabularNums},
     block: {marginTop: space.md},
     tiles: {flexDirection: 'row', gap: space.gutterSm, marginTop: space.md},
+    access: {marginBottom: space.md},
     rollOff: {...typography.bodySm, color: colors.textMuted, marginTop: space.gutterSm, textAlign: 'center'},
     list: {gap: space.gutterSm},
   });

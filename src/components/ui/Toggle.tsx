@@ -18,7 +18,7 @@ export function Toggle({value, onValueChange, accessibilityLabel, disabled}: Pro
       onValueChange={onValueChange}
       disabled={disabled}
       trackColor={{false: colors.surfaceHighest, true: colors.safe}}
-      thumbColor="#FFFFFF"
+      thumbColor={colors.knob}
       ios_backgroundColor={colors.surfaceHighest}
       accessibilityLabel={accessibilityLabel}
     />

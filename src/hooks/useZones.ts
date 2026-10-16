@@ -1,9 +1,11 @@
 import { useCallback, useMemo } from 'react';
 
 import { BUILT_IN_ZONES, NO_ZONE, type ZoneConfig } from '../constants/zones';
+import { resolveZoneAccess } from '../core/zoneAccess';
 import { useT, type TranslationKey } from '../i18n';
 import { useSettingsStore } from '../store/settingsStore';
 import { useZonesStore } from '../store/zonesStore';
+import { useTravelDocuments } from './useZoneContext';
 
 export function zoneIdForCountry(code: string, zones: ZoneConfig[]): string {
   // Custom zones take precedence over built-in ones — they were created explicitly.
@@ -43,10 +45,22 @@ export function useZoneLabel() {
       zone?.id === 'schengen' ? t('zoneShort.schengen') : name(zone),
     [name, t]
   );
+  const docs = useTravelDocuments();
+  // Rule as it applies to the user's documents, e.g. "90/180", "30 d/visit", "No limit".
   const rule = useCallback(
-    (zone: ZoneConfig | undefined | null): string =>
-      t('zone.rule', {max: zone?.maxStayDays ?? 90, window: zone?.windowSizeDays ?? 180}),
-    [t]
+    (zone: ZoneConfig | undefined | null): string => {
+      if (!zone) return t('zone.rule', {max: 90, window: 180});
+      const access = resolveZoneAccess(zone, docs);
+      if (access.mode === 'free') return t('zone.ruleFree');
+      const r = access.constraints[0];
+      if (r?.kind === 'per_visit') {
+        return r.maxStayMonths
+          ? t('zone.rulePerVisitMonths', {months: r.maxStayMonths})
+          : t('zone.rulePerVisit', {max: r.maxStayDays});
+      }
+      return t('zone.rule', {max: r?.maxStayDays ?? 90, window: r?.windowSizeDays ?? 180});
+    },
+    [t, docs]
   );
   return {name, short, rule};
 }

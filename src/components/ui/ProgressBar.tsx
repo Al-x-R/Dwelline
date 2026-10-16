@@ -33,6 +33,7 @@ export function ProgressBar({progress = 0, color, segments, height = 8, thumb = 
         <View
           style={[
             styles.thumb,
+            {backgroundColor: theme.colors.knob, ...theme.elevation.knob},
             {left: `${total * 100}%`, width: height + 6, height: height + 6, marginLeft: -(height + 6) / 2, top: -3},
           ]}
         />
@@ -44,5 +45,5 @@ export function ProgressBar({progress = 0, color, segments, height = 8, thumb = 
 const styles = StyleSheet.create({
   track: {borderRadius: radius.full, overflow: 'visible', justifyContent: 'center'},
   fill: {height: '100%', flexDirection: 'row', borderRadius: radius.full, overflow: 'hidden'},
-  thumb: {position: 'absolute', borderRadius: radius.full, backgroundColor: '#FFFFFF', boxShadow: '0 0 6px rgba(0,0,0,0.35)'},
+  thumb: {position: 'absolute', borderRadius: radius.full},
 });

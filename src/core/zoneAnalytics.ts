@@ -5,26 +5,36 @@ import type { ZoneConfig } from '../constants/zones';
 import {
   buildPresenceSet,
   calculateCompliance,
-  countDaysInWindow,
+  countUsedDays,
   findExitDeadline,
   findMaxStayFromDate,
+  SCHENGEN_RULES,
   simulateTrip,
+  usagePeriodStart,
+  type StayRules,
 } from './schengenCalculator';
 
 const ISO = 'YYYY-MM-DD';
 
 export type ZoneTone = 'safe' | 'warning' | 'danger';
 
-export interface ZoneRules {
-  windowSizeDays: number;
-  maxStayDays: number;
-}
+export type ZoneRules = StayRules;
 
 export function zoneRules(zone: ZoneConfig | undefined): ZoneRules {
+  if (zone?.ruleType === 'per_visit') {
+    const maxStayDays = zone.maxStayDays ?? SCHENGEN_RULES.maxStayDays;
+    // No rolling window: windowSizeDays only mirrors the limit so window-based math stays bounded.
+    return {kind: 'per_visit', windowSizeDays: maxStayDays, maxStayDays};
+  }
   return {
-    windowSizeDays: zone?.windowSizeDays ?? zone?.continuousLimitDays ?? 180,
-    maxStayDays: zone?.maxStayDays ?? zone?.continuousLimitDays ?? 90,
+    kind: 'rolling_window',
+    windowSizeDays: zone?.windowSizeDays ?? SCHENGEN_RULES.windowSizeDays,
+    maxStayDays: zone?.maxStayDays ?? SCHENGEN_RULES.maxStayDays,
   };
+}
+
+export function isPerVisit(rules: ZoneRules): boolean {
+  return rules.kind === 'per_visit';
 }
 
 export function todayIso(): string {
@@ -45,9 +55,9 @@ export interface ZoneSummary {
   windowStart: string;
   windowEnd: string;
   tone: ZoneTone;
-  // Nearest date when the oldest day in the window stops counting.
+  // Nearest date when the oldest day in the window stops counting (rolling_window only).
   nextRollOff: string | null;
-  // Date when the window is fully cleared of past trips.
+  // Date when the window is fully cleared of past trips (rolling_window only).
   fullReset: string | null;
   // Latest exit date if the user is currently inside the zone.
   exitDeadline: string | null;
@@ -59,11 +69,11 @@ export function summarizeZone(
   trips: Trip[],
   zone: ZoneConfig | undefined,
   bufferDays: number,
-  today: string = todayIso()
+  today: string = todayIso(),
+  rules: ZoneRules = zoneRules(zone)
 ): ZoneSummary {
   const zoneId = zone?.id ?? '';
-  const rules = zoneRules(zone);
-  const compliance = calculateCompliance(trips, zoneId, today, rules.windowSizeDays, rules.maxStayDays);
+  const compliance = calculateCompliance(trips, zoneId, today, rules);
   const presence = buildPresenceSet(trips, zoneId, today);
 
   let earliestInWindow: string | null = null;
@@ -79,13 +89,15 @@ export function summarizeZone(
       .filter((t) => t.zoneId === zoneId && t.entryDate > today)
       .sort((a, b) => a.entryDate.localeCompare(b.entryDate))[0] ?? null;
 
+  const rolling = !isPerVisit(rules);
+
   return {
     rules,
     ...compliance,
     tone: toneFor(compliance.daysUsed, rules.maxStayDays, bufferDays),
-    nextRollOff: earliestInWindow ? dayjs(earliestInWindow).add(rules.windowSizeDays, 'day').format(ISO) : null,
-    fullReset: latestPast ? dayjs(latestPast).add(rules.windowSizeDays, 'day').format(ISO) : null,
-    exitDeadline: findExitDeadline(trips, zoneId, today, rules.windowSizeDays, rules.maxStayDays),
+    nextRollOff: rolling && earliestInWindow ? dayjs(earliestInWindow).add(rules.windowSizeDays, 'day').format(ISO) : null,
+    fullReset: rolling && latestPast ? dayjs(latestPast).add(rules.windowSizeDays, 'day').format(ISO) : null,
+    exitDeadline: findExitDeadline(trips, zoneId, today, rules),
     nextPlannedTrip,
     tripsCount: trips.filter((t) => t.zoneId === zoneId).length,
   };
@@ -102,18 +114,19 @@ export function presenceFor(trips: Trip[], zoneId: string, today: string = today
   return buildPresenceSet(trips, zoneId, today);
 }
 
-export function dayInfo(presence: Set<string>, date: string, windowSizeDays: number): DayInfo {
-  const expired = dayjs(date).subtract(windowSizeDays, 'day').format(ISO);
+export function dayInfo(presence: Set<string>, date: string, rules: ZoneRules): DayInfo {
+  if (isPerVisit(rules)) return {date, inZone: presence.has(date), rollOff: false};
+  const expired = dayjs(date).subtract(rules.windowSizeDays, 'day').format(ISO);
   return {date, inZone: presence.has(date), rollOff: presence.has(expired)};
 }
 
 export function windowUsage(presence: Set<string>, date: string, rules: ZoneRules) {
-  const daysUsed = countDaysInWindow(presence, date, rules.windowSizeDays);
+  const daysUsed = countUsedDays(presence, date, rules);
   return {
     daysUsed,
     daysRemaining: Math.max(0, rules.maxStayDays - daysUsed),
     isViolation: daysUsed > rules.maxStayDays,
-    windowStart: dayjs(date).subtract(rules.windowSizeDays - 1, 'day').format(ISO),
+    windowStart: usagePeriodStart(presence, date, rules),
     windowEnd: date,
   };
 }
@@ -137,23 +150,26 @@ export function simulateStay(
   trips: Trip[],
   zone: ZoneConfig | undefined,
   entryDate: string,
-  durationDays: number
+  durationDays: number,
+  rules: ZoneRules = zoneRules(zone)
 ): SimulationResult {
   const zoneId = zone?.id ?? '';
-  const rules = zoneRules(zone);
   const exitDate = dayjs(entryDate).add(durationDays - 1, 'day').format(ISO);
-  const simulation = simulateTrip(trips, zoneId, entryDate, durationDays, rules.windowSizeDays, rules.maxStayDays);
-  const maxStay = findMaxStayFromDate(trips, zoneId, entryDate, rules.windowSizeDays, rules.maxStayDays);
+  const simulation = simulateTrip(trips, zoneId, entryDate, durationDays, rules);
+  const maxStay = findMaxStayFromDate(trips, zoneId, entryDate, rules);
 
   const existing = buildPresenceSet(trips, zoneId, entryDate);
   const lastDay = simulation.dailyStatus[simulation.dailyStatus.length - 1];
   const daysUsedAtExit = lastDay?.daysUsed ?? 0;
-  const usedBeforeTrip = countDaysInWindow(existing, exitDate, rules.windowSizeDays);
-  const usedAtEntry = countDaysInWindow(existing, dayjs(entryDate).subtract(1, 'day').format(ISO), rules.windowSizeDays);
+  const dayBeforeEntry = dayjs(entryDate).subtract(1, 'day').format(ISO);
+  const perVisit = isPerVisit(rules);
+  // per_visit: only a stay that runs right up to the entry date continues into this trip.
+  const usedBeforeTrip = countUsedDays(existing, perVisit ? dayBeforeEntry : exitDate, rules);
+  const usedAtEntry = countUsedDays(existing, dayBeforeEntry, rules);
 
   let firstRollOffDate: string | null = null;
   let cursor = dayjs(entryDate);
-  for (let i = 0; i < durationDays; i++) {
+  for (let i = 0; i < (perVisit ? 0 : durationDays); i++) {
     const expired = cursor.subtract(rules.windowSizeDays, 'day').format(ISO);
     if (existing.has(expired)) {
       firstRollOffDate = cursor.format(ISO);
@@ -171,9 +187,11 @@ export function simulateStay(
     reserveAtExit: Math.max(0, rules.maxStayDays - daysUsedAtExit),
     maxContinuousDays: maxStay?.days ?? 0,
     criticalExitDate: maxStay?.date ?? null,
-    windowStartAtExit: dayjs(exitDate).subtract(rules.windowSizeDays - 1, 'day').format(ISO),
+    windowStartAtExit: perVisit
+      ? dayjs(entryDate).subtract(usedBeforeTrip, 'day').format(ISO)
+      : dayjs(exitDate).subtract(rules.windowSizeDays - 1, 'day').format(ISO),
     usedBeforeTrip,
-    freedDuringTrip: Math.max(0, usedAtEntry - usedBeforeTrip),
+    freedDuringTrip: perVisit ? 0 : Math.max(0, usedAtEntry - usedBeforeTrip),
     firstRollOffDate,
   };
 }

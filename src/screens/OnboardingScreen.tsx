@@ -13,12 +13,13 @@ import { LANGUAGES, LANGUAGE_FLAGS, LANGUAGE_NATIVE_NAMES } from '../i18n/types'
 import type { RootStackParamList } from '../navigation/types';
 import { useSettingsStore } from '../store/settingsStore';
 import { Button, Card, ListRow, Pill, ProgressDial, Screen, SectionHeader, toneColors, toneGradient, type IconName, type Tone } from '../components/ui';
+import { DocumentsEditor } from '../components/app/DocumentsEditor';
 import { ThemeOptions } from '../components/app/ThemeOptions';
 import { ZoneToggleList } from '../components/app/ZoneToggleList';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Onboarding'>;
 
-const STEPS = 3;
+const STEPS = 4;
 const DEMO_USED = 64;
 const DEMO_MAX = 90;
 
@@ -54,7 +55,7 @@ export default function OnboardingScreen({navigation}: Props) {
   const next = () => (step < STEPS - 1 ? setStep(step + 1) : finish());
 
   return (
-    <Screen glow="primary" edges={['top', 'left', 'right']}>
+    <Screen edges={['top', 'left', 'right']}>
       <View style={styles.top}>
         <Pill label={t('onboarding.badge')} tone="safe" orb caps style={styles.badge}/>
         <Pressable onPress={finish} hitSlop={8} accessibilityRole="button">
@@ -71,7 +72,7 @@ export default function OnboardingScreen({navigation}: Props) {
         {step === 0 ? (
           <>
             <LinearGradient
-              colors={theme.dark ? ['#1A2030', '#10261F'] : ['#FFFFFF', '#ECFDF5']}
+              colors={theme.gradients.heroCard}
               start={{x: 0, y: 0}}
               end={{x: 1, y: 1}}
               style={styles.demo}
@@ -127,6 +128,16 @@ export default function OnboardingScreen({navigation}: Props) {
 
         {step === 1 ? (
           <>
+            <Text style={styles.title}>{t('onboarding.docsTitle')}</Text>
+            <Text style={styles.body}>{t('onboarding.docsText')}</Text>
+            <Card padded={false} style={styles.group}>
+              <DocumentsEditor/>
+            </Card>
+          </>
+        ) : null}
+
+        {step === 2 ? (
+          <>
             <Text style={styles.title}>{t('onboarding.zonesTitle')}</Text>
             <Text style={styles.body}>{t('onboarding.zonesText')}</Text>
             <Card padded={false} style={styles.group}>
@@ -135,7 +146,7 @@ export default function OnboardingScreen({navigation}: Props) {
           </>
         ) : null}
 
-        {step === 2 ? (
+        {step === 3 ? (
           <>
             <Text style={styles.title}>{t('onboarding.prefsTitle')}</Text>
             <Text style={styles.body}>{t('onboarding.prefsText')}</Text>

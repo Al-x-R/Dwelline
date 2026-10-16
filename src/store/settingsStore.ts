@@ -5,6 +5,7 @@ import { Appearance } from 'react-native';
 import { getCalendars, getLocales } from 'expo-localization';
 
 import type { Language } from '../i18n/types';
+import type { ResidenceDoc } from '../types/documents';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type DateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
@@ -23,6 +24,10 @@ interface SettingsState {
   selectedZoneId: string;
   safetyBufferDays: number;
 
+  // Up to two passports (ISO codes) and statuses that let the user live in a country.
+  passports: string[];
+  residences: ResidenceDoc[];
+
   overstayAlerts: boolean;
   rollOffAlerts: boolean;
 
@@ -32,11 +37,14 @@ interface SettingsState {
   setThemeMode: (mode: ThemeMode) => void;
   setSelectedZoneId: (zoneId: string) => void;
   setSafetyBufferDays: (days: number) => void;
+  setPassports: (codes: string[]) => void;
+  setResidences: (docs: ResidenceDoc[]) => void;
   setAlerts: (patch: { overstayAlerts?: boolean; rollOffAlerts?: boolean }) => void;
 }
 
 export const MIN_BUFFER_DAYS = 0;
 export const MAX_BUFFER_DAYS = 30;
+export const MAX_PASSPORTS = 2;
 
 export function applyThemeMode(mode: ThemeMode) {
   // Native components (Alert, DateTimePicker, keyboard) follow the selected theme too.
@@ -67,6 +75,9 @@ export const useSettingsStore = create<SettingsState>()(
       selectedZoneId: 'schengen',
       safetyBufferDays: 14,
 
+      passports: [],
+      residences: [],
+
       overstayAlerts: true,
       rollOffAlerts: true,
 
@@ -88,14 +99,16 @@ export const useSettingsStore = create<SettingsState>()(
       setSelectedZoneId: (selectedZoneId) => set({selectedZoneId}),
       setSafetyBufferDays: (days) =>
         set({safetyBufferDays: Math.min(MAX_BUFFER_DAYS, Math.max(MIN_BUFFER_DAYS, days))}),
+      setPassports: (codes) => set({passports: Array.from(new Set(codes)).slice(0, MAX_PASSPORTS)}),
+      setResidences: (residences) => set({residences}),
       setAlerts: (patch) => set((s) => ({...s, ...patch})),
     }),
     {
       name: '@dwelline/settings',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: ({hydrated: _hydrated, ...rest}) => rest,
-      version: 1,
-      // v1: dropped citizenshipCode / residenceCode.
+      version: 2,
+      // v1: dropped citizenshipCode / residenceCode. v2: added passports / residences (defaults fill in).
       migrate: (persisted) => {
         const {citizenshipCode: _c, residenceCode: _r, ...rest} = persisted as Record<string, unknown>;
         return rest as Partial<SettingsState>;

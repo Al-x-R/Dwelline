@@ -8,6 +8,7 @@ import appConfig from '../../app.json';
 import { radius, space, typography, fonts, type AppTheme } from '../constants/theme';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useThemedStyles } from '../hooks/useThemedStyles';
+import { useZoneContext } from '../hooks/useZoneContext';
 import { useZoneLabel, useZones } from '../hooks/useZones';
 import { useT } from '../i18n';
 import { LANGUAGE_NATIVE_NAMES } from '../i18n/types';
@@ -17,6 +18,7 @@ import { resetAllData } from '../store/actions';
 import { shareTripsCsv } from '../services/exportService';
 import { displayDateFormat } from '../utils/format';
 import { BottomSheet, Card, ConfirmDialog, ListRow, Screen, ScreenHeader, SectionHeader, Stepper, Toggle } from '../components/ui';
+import { DocumentsEditor } from '../components/app/DocumentsEditor';
 import { ThemeOptions } from '../components/app/ThemeOptions';
 import { ZoneToggleList } from '../components/app/ZoneToggleList';
 
@@ -31,20 +33,21 @@ export default function SettingsScreen({navigation}: Props) {
   const {selectedZone, activeZones} = useZones();
   const zoneLabel = useZoneLabel();
   const s = useSettingsStore();
+  const {rules} = useZoneContext(selectedZone);
 
   const [themeSheet, setThemeSheet] = useState(false);
   const [zonesSheet, setZonesSheet] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
 
   return (
-    <Screen glow="primary">
+    <Screen>
       <ScreenHeader onBack={() => navigation.goBack()} eyebrow={t('settings.eyebrow')} title={t('settings.title')}/>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.subtitle}>{t('settings.subtitle')}</Text>
 
         <Pressable onPress={() => navigation.navigate('Plans')} accessibilityRole="button" style={({pressed}) => pressed && styles.pressed}>
           <LinearGradient
-            colors={theme.dark ? ['rgba(99,102,241,0.28)', 'rgba(16,185,129,0.14)'] : ['#EEF0FF', '#ECFDF5']}
+            colors={theme.gradients.proCard}
             start={{x: 0, y: 0}}
             end={{x: 1, y: 1}}
             style={styles.pro}
@@ -66,6 +69,11 @@ export default function SettingsScreen({navigation}: Props) {
             </View>
           </LinearGradient>
         </Pressable>
+
+        <SectionHeader title={t('settings.documents')}/>
+        <Card padded={false} style={styles.group}>
+          <DocumentsEditor/>
+        </Card>
 
         <SectionHeader title={t('settings.localization')}/>
         <Card padded={false} style={styles.group}>
@@ -93,8 +101,10 @@ export default function SettingsScreen({navigation}: Props) {
           <ListRow
             icon="calculator-outline"
             iconTone="safe"
-            title={t('settings.window', {rule: zoneLabel.rule(selectedZone)})}
-            subtitle={t('settings.windowHint', {window: selectedZone.windowSizeDays ?? 180})}
+            title={t(rules.kind === 'per_visit' ? 'settings.perVisit' : 'settings.window', {rule: zoneLabel.rule(selectedZone)})}
+            subtitle={rules.kind === 'per_visit'
+              ? t('settings.perVisitHint')
+              : t('settings.windowHint', {window: rules.windowSizeDays})}
           />
           <ListRow
             icon="time-outline"

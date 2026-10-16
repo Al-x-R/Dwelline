@@ -45,7 +45,7 @@ export default function LanguageScreen({navigation}: Props) {
   };
 
   return (
-    <Screen glow="primary">
+    <Screen>
       <ScreenHeader onBack={() => navigation.goBack()} title={t('language.title')}/>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.intro}>

@@ -21,6 +21,8 @@ import { FLOATING_CTA_SPACE } from '../components/app/TabBar';
 import { Card, EmptyState, ListRow, ProgressBar, Screen, SectionHeader, StatTile } from '../components/ui';
 import { ZoneStatusCard } from '../features/zone/ZoneStatusCard';
 import type { Trip } from '../types/Trip';
+import { zoneContext } from '../core/zoneAccess';
+import { useTravelDocuments } from '../hooks/useZoneContext';
 
 const MONTHS = 12;
 const CHART_HEIGHT = 120;
@@ -42,6 +44,7 @@ export default function ReportsScreen() {
   const trips = useTripsStore((s) => s.trips);
   const journeys = useJourneysStore((s) => s.journeys);
   const buffer = useSettingsStore((s) => s.safetyBufferDays);
+  const docs = useTravelDocuments();
   const setSelectedZoneId = useSettingsStore((s) => s.setSelectedZoneId);
   const [activeBar, setActiveBar] = useState<number | null>(null);
 
@@ -49,8 +52,11 @@ export default function ReportsScreen() {
   const today = todayIso();
 
   const zoneSummaries = useMemo(
-    () => activeZones.map((zone) => ({zone, summary: summarizeZone(trips, zone, buffer)})),
-    [activeZones, trips, buffer]
+    () => activeZones.map((zone) => {
+      const ctx = zoneContext(zone, trips, docs, today);
+      return {zone, summary: summarizeZone(ctx.trips, zone, buffer, today, ctx.rules), free: ctx.access.mode === 'free'};
+    }),
+    [activeZones, trips, docs, buffer, today]
   );
 
   const stats = useMemo(() => {
@@ -105,13 +111,14 @@ export default function ReportsScreen() {
 
         <SectionHeader title={t('reports.zones')}/>
         <View style={styles.stack}>
-          {zoneSummaries.map(({zone, summary}) => (
+          {zoneSummaries.map(({zone, summary, free}) => (
             <ZoneStatusCard
               key={zone.id}
               zone={zone}
               daysUsed={summary.daysUsed}
               maxDays={summary.rules.maxStayDays}
               tone={summary.tone}
+              free={free}
               onPress={() => {
                 setSelectedZoneId(zone.id);
                 navigation.navigate('MainTabs', {screen: 'Calendar'});

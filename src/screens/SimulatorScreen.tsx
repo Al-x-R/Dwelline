@@ -7,7 +7,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { radius, space, tabularNums, typography, fonts, type AppTheme } from '../constants/theme';
 import { countryCodeToFlag, countryName } from '../constants/countries';
-import { simulateStay, todayIso, zoneRules } from '../core/zoneAnalytics';
+import { isPerVisit, simulateStay, todayIso } from '../core/zoneAnalytics';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useThemedStyles } from '../hooks/useThemedStyles';
 import { useFormatters } from '../hooks/useFormatters';
@@ -22,14 +22,17 @@ import {
   Toggle, toneColors, toneGradient, type Tone,
 } from '../components/ui';
 import { CountryPickerSheet } from '../components/app/CountryPickerSheet';
-import { DatePickerSheet } from '../components/calendar/DatePickerSheet';
+import type { DateImpact } from '../components/calendar/DatePickerSheet';
+import { DateRangeSheet } from '../components/calendar/DateRangeSheet';
 import { makeId } from '../features/journey/useJourneyDraft';
+import { ZoneAccessBanner } from '../features/zone/ZoneAccessBanner';
+import { useZoneContext } from '../hooks/useZoneContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Simulator'>;
 
 const DEFAULT_OFFSET_DAYS = 7;
 const DEFAULT_DURATION = 30;
-const STEP = 5;
+const STEP = 1;
 
 export default function SimulatorScreen({navigation, route}: Props) {
   const theme = useAppTheme();
@@ -38,7 +41,6 @@ export default function SimulatorScreen({navigation, route}: Props) {
   const {t, lang} = useT();
   const {activeZones, allZones, selectedZone} = useZones();
   const zoneLabel = useZoneLabel();
-  const trips = useTripsStore((s) => s.trips);
   const addTrips = useTripsStore((s) => s.addTrips);
   const addJourney = useJourneysStore((s) => s.addJourney);
   const buffer = useSettingsStore((s) => s.safetyBufferDays);
@@ -55,17 +57,30 @@ export default function SimulatorScreen({navigation, route}: Props) {
   const [saved, setSaved] = useState(false);
 
   const zone = allZones.find((z) => z.id === zoneId) ?? selectedZone;
-  const rules = zoneRules(zone);
+  const ctx = useZoneContext(zone);
+  const rules = ctx.rules;
+  const perVisit = isPerVisit(rules);
+  const free = ctx.access.mode === 'free';
   const zoneChoices = activeZones.some((z) => z.id === zone.id) ? activeZones : [zone, ...activeZones];
 
   // For single-country zones the entry country is obvious.
   const countryCode =
     zone.countryCodes.length === 1 ? zone.countryCodes[0] : picked?.zoneId === zone.id ? picked.code : null;
 
-  const result = useMemo(() => simulateStay(trips, zone, entry, duration), [trips, zone, entry, duration]);
+  const result = useMemo(
+    () => simulateStay(ctx.trips, zone, entry, duration, ctx.rules),
+    [ctx, zone, entry, duration]
+  );
   const tone: Tone = result.isViolation ? 'danger' : result.reserveAtExit <= buffer ? 'warning' : 'safe';
   const toneFg = toneColors(theme.colors, tone).fg;
   const sliderMax = Math.max(rules.maxStayDays, duration);
+  const exitDate = dayjs(entry).add(duration - 1, 'day').format('YYYY-MM-DD');
+
+  const rangeImpact = (start: string, end: string): DateImpact | null => {
+    if (free) return null;
+    const r = simulateStay(ctx.trips, zone, start, dayjs(end).diff(dayjs(start), 'day') + 1, ctx.rules);
+    return {ok: !r.isViolation, days: r.isViolation ? r.overageDays : r.reserveAtExit, zoneName: zoneLabel.short(zone)};
+  };
 
   const statusLabel = result.isViolation
     ? t('simulator.denied')
@@ -92,6 +107,7 @@ export default function SimulatorScreen({navigation, route}: Props) {
       originTransportMode: null,
       destinationCountryName: null,
       destinationCountryFlag: null,
+      destinationArrivalDate: null,
       destinationArrivalTime: null,
       turnaroundTripId: null,
       tripIds: [id],
@@ -115,7 +131,7 @@ export default function SimulatorScreen({navigation, route}: Props) {
   const freeDays = Math.max(0, rules.maxStayDays - result.usedBeforeTrip - duration);
 
   return (
-    <Screen glow={tone}>
+    <Screen>
       <ScreenHeader
         onBack={() => navigation.goBack()}
         eyebrow={t('simulator.eyebrow')}
@@ -125,66 +141,74 @@ export default function SimulatorScreen({navigation, route}: Props) {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.subtitle}>{t('simulator.subtitle', {rule: zoneLabel.rule(zone)})}</Text>
 
-        <Card style={[styles.block, theme.elevation[tone === 'danger' ? 'dangerGlow' : 'safeGlow']]} tone={tone}>
-          <View style={styles.statusRow}>
-            <View style={[styles.orb, {backgroundColor: toneFg, boxShadow: `0 0 8px ${toneFg}`}]}/>
-            <Text style={[styles.statusText, {color: toneFg}]}>{statusLabel}</Text>
-          </View>
+        <View style={styles.block}>
+          <ZoneAccessBanner zone={zone} access={ctx.access} showRequirements/>
+        </View>
 
-          <View style={styles.resultRow}>
-            <ProgressDial
-              progress={result.daysUsedAtExit / rules.maxStayDays}
-              size={136}
-              strokeWidth={12}
-              colors={toneGradient(theme, tone)}
-              showThumb={false}
-            >
-              <Text style={styles.dialValue}>{result.daysUsedAtExit}</Text>
-              <Text style={styles.dialCaption}>{t('simulator.ofDays', {max: rules.maxStayDays})}</Text>
-            </ProgressDial>
-            <View style={styles.resultTiles}>
-              <View style={styles.resultTile}>
-                <Text style={styles.caps}>{t('simulator.continuous')}</Text>
-                <Text style={styles.tileValue}>
-                  <Text style={{color: theme.colors.safe}}>{result.maxContinuousDays}</Text>{' '}
-                  <Text style={styles.tileUnit}>{t('simulator.inRow', {count: result.maxContinuousDays})}</Text>
-                </Text>
+        {free ? null : (
+          <>
+            <Card style={[styles.block, theme.elevation[tone === 'danger' ? 'dangerGlow' : 'safeGlow']]} tone={tone}>
+              <View style={styles.statusRow}>
+                <View style={[styles.orb, {backgroundColor: toneFg, boxShadow: `0 0 8px ${toneFg}`}]}/>
+                <Text style={[styles.statusText, {color: toneFg}]}>{statusLabel}</Text>
               </View>
-              <View style={styles.resultTile}>
-                <Text style={styles.caps}>{t('simulator.reserve')}</Text>
-                <Text style={styles.tileValue}>
-                  {result.reserveAtExit}{' '}
-                  <Text style={styles.tileUnit}>{t('simulator.inReserve', {count: result.reserveAtExit})}</Text>
-                </Text>
+
+              <View style={styles.resultRow}>
+                <ProgressDial
+                  progress={result.daysUsedAtExit / rules.maxStayDays}
+                  size={136}
+                  strokeWidth={12}
+                  colors={toneGradient(theme, tone)}
+                  showThumb={false}
+                >
+                  <Text style={styles.dialValue}>{result.daysUsedAtExit}</Text>
+                  <Text style={styles.dialCaption}>{t('simulator.ofDays', {max: rules.maxStayDays})}</Text>
+                </ProgressDial>
+                <View style={styles.resultTiles}>
+                  <View style={styles.resultTile}>
+                    <Text style={styles.caps}>{t('simulator.continuous')}</Text>
+                    <Text style={styles.tileValue}>
+                      <Text style={{color: theme.colors.safe}}>{result.maxContinuousDays}</Text>{' '}
+                      <Text style={styles.tileUnit}>{t('simulator.inRow', {count: result.maxContinuousDays})}</Text>
+                    </Text>
+                  </View>
+                  <View style={styles.resultTile}>
+                    <Text style={styles.caps}>{t('simulator.reserve')}</Text>
+                    <Text style={styles.tileValue}>
+                      {result.reserveAtExit}{' '}
+                      <Text style={styles.tileUnit}>{t('simulator.inReserve', {count: result.reserveAtExit})}</Text>
+                    </Text>
+                  </View>
+                </View>
               </View>
-            </View>
-          </View>
 
-          <View style={styles.critical}>
-            <View style={[styles.criticalIcon, {backgroundColor: toneColors(theme.colors, tone).bg}]}>
-              <Ionicons name="shield-checkmark-outline" size={18} color={toneFg}/>
-            </View>
-            <View style={styles.flex}>
-              <Text style={styles.caps}>{t('simulator.criticalExit')}</Text>
-              <Text style={styles.criticalValue}>
-                {result.criticalExitDate
-                  ? t('simulator.criticalExitValue', {date: fmt.full(result.criticalExitDate)})
-                  : t('simulator.noEntry')}
-              </Text>
-            </View>
-            <Ionicons name="airplane-outline" size={20} color={theme.colors.textMuted}/>
-          </View>
-        </Card>
+              <View style={styles.critical}>
+                <View style={[styles.criticalIcon, {backgroundColor: toneColors(theme.colors, tone).bg}]}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color={toneFg}/>
+                </View>
+                <View style={styles.flex}>
+                  <Text style={styles.caps}>{t('simulator.criticalExit')}</Text>
+                  <Text style={styles.criticalValue}>
+                    {result.criticalExitDate
+                      ? t('simulator.criticalExitValue', {date: fmt.full(result.criticalExitDate)})
+                      : t('simulator.noEntry')}
+                  </Text>
+                </View>
+                <Ionicons name="airplane-outline" size={20} color={theme.colors.textMuted}/>
+              </View>
+            </Card>
 
-        {result.isViolation ? (
-          <View style={styles.block}>
-            <InfoBanner
-              icon="warning-outline"
-              tone="danger"
-              text={t('simulator.overstayText', {days: fmt.days(result.overageDays)})}
-            />
-          </View>
-        ) : null}
+            {result.isViolation ? (
+              <View style={styles.block}>
+                <InfoBanner
+                  icon="warning-outline"
+                  tone="danger"
+                  text={t('simulator.overstayText', {days: fmt.days(result.overageDays)})}
+                />
+              </View>
+            ) : null}
+          </>
+        )}
 
         <Card style={styles.block}>
           <View style={styles.cardHeader}>
@@ -215,8 +239,8 @@ export default function SimulatorScreen({navigation, route}: Props) {
               <Ionicons name="calendar-outline" size={18} color={theme.colors.accentText}/>
             </View>
             <View style={styles.flex}>
-              <Text style={styles.dateValue}>{fmt.full(entry)}</Text>
-              <Text style={styles.muted}>{fmt.weekday(entry)}</Text>
+              <Text style={styles.dateValue}>{fmt.short(entry)} — {fmt.shortYear(exitDate)}</Text>
+              <Text style={styles.muted}>{fmt.weekday(entry)} • {t('common.days', {count: duration})}</Text>
             </View>
             <Text style={styles.link}>{t('common.edit')}</Text>
             <Ionicons name="chevron-forward" size={16} color={theme.colors.accentText}/>
@@ -242,14 +266,14 @@ export default function SimulatorScreen({navigation, route}: Props) {
           </View>
           <View style={styles.stepRow}>
             <Button
-              label={`− ${t('simulator.step', {count: STEP})}`}
+              label={`− ${t('common.days', {count: STEP})}`}
               variant="secondary"
               size="md"
               onPress={() => setDuration((d) => Math.max(1, d - STEP))}
               style={styles.flex}
             />
             <Button
-              label={`+ ${t('simulator.step', {count: STEP})}`}
+              label={`+ ${t('common.days', {count: STEP})}`}
               variant="secondary"
               size="md"
               onPress={() => setDuration((d) => Math.min(sliderMax, d + STEP))}
@@ -275,73 +299,77 @@ export default function SimulatorScreen({navigation, route}: Props) {
           </View>
         </Card>
 
-        <Card style={styles.block}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="pulse-outline" size={20} color={theme.colors.accentText}/>
-            <Text style={[styles.cardTitle, styles.flex]}>{t('simulator.dynamics', {window: rules.windowSizeDays})}</Text>
-            {result.freedDuringTrip > 0 ? (
-              <Pill label={t('simulator.gain', {days: fmt.days(result.freedDuringTrip)})} tone="safe" caps/>
-            ) : null}
-          </View>
-          <Text style={styles.body}>{t('simulator.dynamicsText')}</Text>
+        {free ? null : (
+          <Card style={styles.block}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="pulse-outline" size={20} color={theme.colors.accentText}/>
+              <Text style={[styles.cardTitle, styles.flex]}>{perVisit ? t('simulator.visitDynamics') : t('simulator.dynamics', {window: rules.windowSizeDays})}</Text>
+              {result.freedDuringTrip > 0 ? (
+                <Pill label={t('simulator.gain', {days: fmt.days(result.freedDuringTrip)})} tone="safe" caps/>
+              ) : null}
+            </View>
+            <Text style={styles.body}>{perVisit ? t('simulator.visitDynamicsText') : t('simulator.dynamicsText')}</Text>
 
-          <View style={styles.timeline}>
-            <View style={styles.timelineLabels}>
-              <Text style={styles.timelineText}>{t('simulator.windowStart', {date: fmt.short(result.windowStartAtExit)})}</Text>
-              <Text style={styles.timelineText}>{t('simulator.entry', {date: fmt.short(result.entryDate)})}</Text>
-              <Text style={styles.timelineText}>{t('simulator.exit', {date: fmt.short(result.exitDate)})}</Text>
+            <View style={styles.timeline}>
+              <View style={styles.timelineLabels}>
+                <Text style={styles.timelineText}>{t(perVisit ? 'simulator.visitStart' : 'simulator.windowStart', {date: fmt.short(result.windowStartAtExit)})}</Text>
+                <Text style={styles.timelineText}>{t('simulator.entry', {date: fmt.short(result.entryDate)})}</Text>
+                <Text style={styles.timelineText}>{t('simulator.exit', {date: fmt.short(result.exitDate)})}</Text>
+              </View>
+              <ProgressBar
+                height={10}
+                segments={[
+                  {value: usedPart, color: theme.colors.textMuted},
+                  {value: plannedPart, color: theme.colors.safe},
+                  ...(overDays > 0 ? [{value: overDays / rules.maxStayDays, color: theme.colors.danger}] : []),
+                ]}
+              />
+              <View style={styles.legendRow}>
+                <Legend color={theme.colors.textMuted} label={t('simulator.usedShort')} value={`${result.usedBeforeTrip}`}/>
+                <Legend color={theme.colors.safe} label={t('simulator.plannedShort')} value={`${duration}`}/>
+                {overDays > 0 ? (
+                  <Legend color={theme.colors.danger} label={t('simulator.overShort')} value={`${overDays}`}/>
+                ) : (
+                  <Legend color={theme.colors.track} label={t('simulator.freeShort')} value={`${freeDays}`}/>
+                )}
+              </View>
             </View>
-            <ProgressBar
-              height={10}
-              segments={[
-                {value: usedPart, color: theme.colors.textMuted},
-                {value: plannedPart, color: theme.colors.safe},
-                ...(overDays > 0 ? [{value: overDays / rules.maxStayDays, color: theme.colors.danger}] : []),
-              ]}
-            />
-            <View style={styles.legendRow}>
-              <Legend color={theme.colors.textMuted} label={t('simulator.usedShort')} value={`${result.usedBeforeTrip}`}/>
-              <Legend color={theme.colors.safe} label={t('simulator.plannedShort')} value={`${duration}`}/>
-              {overDays > 0 ? (
-                <Legend color={theme.colors.danger} label={t('simulator.overShort')} value={`${overDays}`}/>
-              ) : (
-                <Legend color={theme.colors.track} label={t('simulator.freeShort')} value={`${freeDays}`}/>
-              )}
-            </View>
-          </View>
 
-          <View style={styles.rollOff}>
-            <View style={styles.rollOffIcon}>
-              <Ionicons name="refresh-outline" size={18} color={theme.colors.safe}/>
-            </View>
-            <View style={styles.flex}>
-              <Text style={styles.rollOffTitle}>
-                {t('simulator.rollOff')}
-                {result.freedDuringTrip > 0 ? (
-                  <Text style={{color: theme.colors.safe}}>  +{fmt.days(result.freedDuringTrip)}</Text>
-                ) : null}
-              </Text>
-              <Text style={styles.muted}>
-                {result.firstRollOffDate
-                  ? t('simulator.rollOffText', {date: fmt.full(result.firstRollOffDate), window: rules.windowSizeDays})
-                  : t('simulator.noRollOff')}
-              </Text>
-            </View>
-          </View>
+            {perVisit ? null : (
+              <View style={styles.rollOff}>
+                <View style={styles.rollOffIcon}>
+                  <Ionicons name="refresh-outline" size={18} color={theme.colors.safe}/>
+                </View>
+                <View style={styles.flex}>
+                  <Text style={styles.rollOffTitle}>
+                    {t('simulator.rollOff')}
+                    {result.freedDuringTrip > 0 ? (
+                      <Text style={{color: theme.colors.safe}}>  +{fmt.days(result.freedDuringTrip)}</Text>
+                    ) : null}
+                  </Text>
+                  <Text style={styles.muted}>
+                    {result.firstRollOffDate
+                      ? t('simulator.rollOffText', {date: fmt.full(result.firstRollOffDate), window: rules.windowSizeDays})
+                      : t('simulator.noRollOff')}
+                  </Text>
+                </View>
+              </View>
+            )}
 
-          <View style={styles.alertRow}>
-            <Ionicons name="notifications-outline" size={20} color={theme.colors.textBody}/>
-            <View style={styles.flex}>
-              <Text style={styles.alertTitle}>{t('simulator.riskAlert')}</Text>
-              <Text style={styles.muted}>{t('simulator.riskAlertHint')}</Text>
+            <View style={styles.alertRow}>
+              <Ionicons name="notifications-outline" size={20} color={theme.colors.textBody}/>
+              <View style={styles.flex}>
+                <Text style={styles.alertTitle}>{t('simulator.riskAlert')}</Text>
+                <Text style={styles.muted}>{t('simulator.riskAlertHint')}</Text>
+              </View>
+              <Toggle
+                value={overstayAlerts}
+                onValueChange={(v) => setAlerts({overstayAlerts: v})}
+                accessibilityLabel={t('simulator.riskAlert')}
+              />
             </View>
-            <Toggle
-              value={overstayAlerts}
-              onValueChange={(v) => setAlerts({overstayAlerts: v})}
-              accessibilityLabel={t('simulator.riskAlert')}
-            />
-          </View>
-        </Card>
+          </Card>
+        )}
 
         <View style={[styles.block, styles.actions]}>
           <Button
@@ -355,13 +383,15 @@ export default function SimulatorScreen({navigation, route}: Props) {
         </View>
       </ScrollView>
 
-      <DatePickerSheet
+      <DateRangeSheet
         visible={datePicker}
-        title={t('simulator.entryDate')}
-        value={entry}
+        start={entry}
+        end={exitDate}
         minDate={todayIso()}
-        onConfirm={(d) => {
-          setEntry(d);
+        impact={rangeImpact}
+        onConfirm={(start, end) => {
+          setEntry(start);
+          setDuration(dayjs(end).diff(dayjs(start), 'day') + 1);
           setSaved(false);
           setDatePicker(false);
         }}

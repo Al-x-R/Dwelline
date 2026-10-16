@@ -6,19 +6,26 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { space, typography, type AppTheme } from '../constants/theme';
 import { countryCodeToFlag, countryName } from '../constants/countries';
 import { NO_ZONE } from '../constants/zones';
+import type { StayRuleKind } from '../core/schengenCalculator';
+import { makeId } from '../features/journey/useJourneyDraft';
 import { useThemedStyles } from '../hooks/useThemedStyles';
 import { useZoneLabel, useZones, zoneIdForCountry } from '../hooks/useZones';
 import { useT } from '../i18n';
 import type { RootStackParamList } from '../navigation/types';
 import { useSettingsStore } from '../store/settingsStore';
 import { useZonesStore } from '../store/zonesStore';
-import { Button, Card, InfoBanner, ListRow, Screen, ScreenHeader, SelectField, Stepper, TextField } from '../components/ui';
+import { Button, Card, FieldLabel, InfoBanner, Screen, ScreenHeader, SegmentedControl, SelectField, TextField } from '../components/ui';
 import { CountryPickerSheet } from '../components/app/CountryPickerSheet';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddZone'>;
 
-const STAY_STEP = 5;
-const WINDOW_STEP = 30;
+const MAX_DAYS = 3650;
+
+// Digits only; empty or zero means "not set".
+function parseDays(value: string): number {
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) && n > 0 ? Math.min(n, MAX_DAYS) : 0;
+}
 
 export default function AddZoneScreen({navigation}: Props) {
   const styles = useThemedStyles(createStyles);
@@ -30,23 +37,28 @@ export default function AddZoneScreen({navigation}: Props) {
 
   const [code, setCode] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [maxStay, setMaxStay] = useState(90);
-  const [windowDays, setWindowDays] = useState(180);
+  const [ruleType, setRuleType] = useState<StayRuleKind>('per_visit');
+  const [maxStayText, setMaxStayText] = useState('30');
+  const [windowText, setWindowText] = useState('180');
   const [picker, setPicker] = useState(false);
 
+  const maxStay = parseDays(maxStayText);
+  const windowDays = parseDays(windowText);
+  const perVisit = ruleType === 'per_visit';
+  const windowTooSmall = !perVisit && maxStay > 0 && windowDays > 0 && windowDays < maxStay;
+
   const existingZone = code ? allZones.find((z) => z.id === zoneIdForCountry(code, allZones) && z.id !== NO_ZONE) : undefined;
-  const canSave = !!code && maxStay > 0 && windowDays >= maxStay;
+  const canSave = !!code && maxStay > 0 && (perVisit || (windowDays > 0 && !windowTooSmall));
 
   const save = async () => {
     if (!code) return;
-    const id = `custom_${code.toLowerCase()}_${Date.now().toString(36)}`;
+    const id = `custom_${code.toLowerCase()}_${makeId()}`;
     await addCustomZone({
       id,
       name: name.trim() || countryName(code, lang),
       flag: countryCodeToFlag(code),
-      ruleType: 'rolling_window',
-      windowSizeDays: windowDays,
-      maxStayDays: maxStay,
+      ruleType,
+      ...(perVisit ? {maxStayDays: maxStay} : {windowSizeDays: windowDays, maxStayDays: maxStay}),
       isMultiCountry: false,
       countryCodes: [code],
     });
@@ -54,11 +66,14 @@ export default function AddZoneScreen({navigation}: Props) {
     navigation.goBack();
   };
 
+  const daysProps = {keyboardType: 'number-pad' as const, maxLength: 4, selectTextOnFocus: true};
+
   return (
     <Screen edges={['top', 'left', 'right']}>
       <ScreenHeader onBack={() => navigation.goBack()} backIcon="close" eyebrow={t('addZone.eyebrow')} title={t('addZone.title')}/>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.body}>{t('addZone.text')}</Text>
+
         <Card style={styles.card}>
           <SelectField
             label={t('addZone.country')}
@@ -67,32 +82,70 @@ export default function AddZoneScreen({navigation}: Props) {
             placeholder={t('countryPicker.title')}
             onPress={() => setPicker(true)}
           />
-          <TextField
-            label={t('addZone.name')}
-            value={name}
-            onChangeText={setName}
-            placeholder={code ? countryName(code, lang) : ''}
-          />
+          <View>
+            <TextField
+              label={t('addZone.name')}
+              value={name}
+              onChangeText={setName}
+              placeholder={code ? countryName(code, lang) : ''}
+            />
+            <Text style={styles.hint}>{t('addZone.nameHint')}</Text>
+          </View>
         </Card>
-        <Card padded={false} style={[styles.card, styles.group]}>
-          <ListRow
-            icon="hourglass-outline"
-            iconTone="safe"
-            title={t('addZone.maxStay')}
-            trailing={
-              <Stepper value={maxStay} label={String(maxStay)} onChange={setMaxStay} min={STAY_STEP} max={windowDays} step={STAY_STEP} accessibilityLabel={t('addZone.maxStay')}/>
-            }
-          />
-          <ListRow
-            icon="calendar-outline"
-            iconTone="primary"
-            title={t('addZone.window')}
-            trailing={
-              <Stepper value={windowDays} label={String(windowDays)} onChange={setWindowDays} min={WINDOW_STEP} max={720} step={WINDOW_STEP} accessibilityLabel={t('addZone.window')}/>
-            }
-            last
-          />
+
+        <Card style={styles.card}>
+          <View>
+            <FieldLabel>{t('addZone.ruleType')}</FieldLabel>
+            <SegmentedControl
+              options={[
+                {value: 'per_visit', label: t('addZone.rulePerVisit')},
+                {value: 'rolling_window', label: t('addZone.ruleWindow')},
+              ]}
+              value={ruleType}
+              onChange={setRuleType}
+            />
+          </View>
+          <View>
+            <TextField
+              label={`${t('addZone.maxStay')}, ${t('addZone.daysUnit')}`}
+              value={maxStayText}
+              onChangeText={(v) => setMaxStayText(v.replace(/\D/g, ''))}
+              {...daysProps}
+            />
+            <Text style={styles.hint}>{perVisit ? t('addZone.maxStayHintVisit') : t('addZone.maxStayHintWindow')}</Text>
+          </View>
+          {perVisit ? null : (
+            <View>
+              <TextField
+                label={t('addZone.window')}
+                value={windowText}
+                onChangeText={(v) => setWindowText(v.replace(/\D/g, ''))}
+                {...daysProps}
+              />
+              <Text style={[styles.hint, windowTooSmall && styles.error]}>
+                {windowTooSmall ? t('addZone.windowTooSmall') : t('addZone.windowHint')}
+              </Text>
+            </View>
+          )}
         </Card>
+
+        {maxStay > 0 && (perVisit || (windowDays > 0 && !windowTooSmall)) ? (
+          <View style={styles.card}>
+            <InfoBanner
+              icon="calculator-outline"
+              tone="safe"
+              title={t('addZone.previewTitle')}
+              text={perVisit
+                ? t('addZone.previewVisit', {max: maxStay})
+                : t('addZone.previewWindow', {max: maxStay, window: windowDays})}
+            />
+          </View>
+        ) : null}
+
+        <View style={styles.card}>
+          <InfoBanner icon="help-circle-outline" title={t('addZone.helpTitle')} text={t('addZone.helpText')}/>
+        </View>
+
         {existingZone ? (
           <View style={styles.card}>
             <InfoBanner icon="information-circle-outline" tone="warning" text={t('addZone.exists', {zone: zoneLabel.name(existingZone)})}/>
@@ -112,7 +165,8 @@ function createStyles({colors}: AppTheme) {
     content: {paddingHorizontal: space.md, paddingBottom: space.xl},
     body: {...typography.bodyMd, color: colors.textBody},
     card: {marginTop: space.md, gap: space.md},
-    group: {paddingHorizontal: space.md, gap: 0},
+    hint: {...typography.bodySm, color: colors.textMuted, marginTop: space.xs + 2},
+    error: {color: colors.danger},
     footer: {paddingHorizontal: space.md, paddingTop: space.gutterSm, paddingBottom: space.sm},
   });
 }

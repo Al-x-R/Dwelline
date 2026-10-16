@@ -8,9 +8,10 @@ import { useThemedStyles } from '../hooks/useThemedStyles';
 import { useFormatters } from '../hooks/useFormatters';
 import { useZoneLabel, useZones } from '../hooks/useZones';
 import { useZoneSummary } from '../hooks/useZoneSummary';
+import { ZoneAccessBanner } from '../features/zone/ZoneAccessBanner';
 import { useT } from '../i18n';
 import { useRootNavigation } from '../navigation/types';
-import { tripDaysCount } from '../core/zoneAnalytics';
+import { isPerVisit, tripDaysCount } from '../core/zoneAnalytics';
 import { shareTripsCsv } from '../services/exportService';
 import { AppHeader } from '../components/app/AppHeader';
 import { FLOATING_CTA_SPACE } from '../components/app/TabBar';
@@ -32,6 +33,7 @@ export default function HistoryScreen() {
   const journeys = useJourneyList();
   const [filter, setFilter] = useState<Filter>('all');
   const {rules} = summary;
+  const free = summary.access.mode === 'free';
 
   const zoneId = selectedZone.id;
   const touchesZone = useCallback((item: JourneyListItem) => item.trips.some((tr) => tr.zoneId === zoneId), [zoneId]);
@@ -58,8 +60,13 @@ export default function HistoryScreen() {
   );
 
   const footnoteFor = (item: JourneyListItem) => {
+    if (free) {
+      const days = item.trips.filter((tr) => tr.zoneId === selectedZone.id).reduce((acc, tr) => acc + tripDaysCount(tr), 0);
+      return days > 0 ? {label: `${selectedZone.flag} ${zoneLabel.short(selectedZone)} ${fmt.days(days)}`, tone: 'neutral' as const} : undefined;
+    }
     if (!item.span || item.span.end < summary.windowStart) {
-      return {label: t('history.outsideWindow', {window: rules.windowSizeDays}), tone: 'neutral' as const};
+      const label = isPerVisit(rules) ? t('history.pastVisit') : t('history.outsideWindow', {window: rules.windowSizeDays});
+      return {label, tone: 'neutral' as const};
     }
     const days = item.trips.filter((tr) => tr.zoneId === selectedZone.id).reduce((s, tr) => s + tripDaysCount(tr), 0);
     if (days === 0) return undefined;
@@ -102,29 +109,35 @@ export default function HistoryScreen() {
         ))}
       </View>
 
-      <Card style={styles.windowCard}>
-        <View style={styles.windowTop}>
-          <View style={styles.flex}>
-            <Text style={styles.caps}>{t('history.windowCard', {window: rules.windowSizeDays})}</Text>
-            <Text style={styles.windowValue}>
-              {summary.daysUsed}
-              <Text style={styles.windowMax}> / {fmt.days(rules.maxStayDays)}</Text>
-            </Text>
+      {free ? (
+        <View style={styles.windowCard}>
+          <ZoneAccessBanner zone={selectedZone} access={summary.access}/>
+        </View>
+      ) : (
+        <Card style={styles.windowCard}>
+          <View style={styles.windowTop}>
+            <View style={styles.flex}>
+              <Text style={styles.caps}>{isPerVisit(rules) ? t('history.visitCard') : t('history.windowCard', {window: rules.windowSizeDays})}</Text>
+              <Text style={styles.windowValue}>
+                {summary.daysUsed}
+                <Text style={styles.windowMax}> / {fmt.days(rules.maxStayDays)}</Text>
+              </Text>
+            </View>
+            <Text style={[styles.status, {color: toneFg}]}>{t(`status.${summary.tone}`)}</Text>
           </View>
-          <Text style={[styles.status, {color: toneFg}]}>{t(`status.${summary.tone}`)}</Text>
-        </View>
-        <ProgressBar progress={summary.daysUsed / rules.maxStayDays} color={toneFg}/>
-        <View style={styles.windowBottom}>
-          <Text style={styles.muted}>
-            {t('history.remaining')} <Text style={styles.strong}>{fmt.days(summary.daysRemaining)}</Text>
-          </Text>
-          {summary.nextRollOff ? (
+          <ProgressBar progress={summary.daysUsed / rules.maxStayDays} color={toneFg}/>
+          <View style={styles.windowBottom}>
             <Text style={styles.muted}>
-              {t('history.reset')} <Text style={styles.strong}>{fmt.short(summary.nextRollOff)}</Text>
+              {t('history.remaining')} <Text style={styles.strong}>{fmt.days(summary.daysRemaining)}</Text>
             </Text>
-          ) : null}
-        </View>
-      </Card>
+            {summary.nextRollOff ? (
+              <Text style={styles.muted}>
+                {t('history.reset')} <Text style={styles.strong}>{fmt.short(summary.nextRollOff)}</Text>
+              </Text>
+            ) : null}
+          </View>
+        </Card>
+      )}
 
       <SectionHeader title={t('history.recent')} caption={visible.length > 0 ? t('history.chronology') : undefined}/>
     </View>
