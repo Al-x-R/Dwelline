@@ -2,7 +2,7 @@ import { PASSPORT_OVERRIDES, PASSPORT_RULES } from '../constants/passportRules';
 import { BUILT_IN_ZONES, type ZoneConfig } from '../constants/zones';
 import type { Trip } from '../types/Trip';
 import { calculateCompliance, findExitDeadline } from './schengenCalculator';
-import { applyExemptions, resolveZoneAccess } from './zoneAccess';
+import { applyExemptions, resolveZoneAccess, zoneContext } from './zoneAccess';
 
 const zone = (id: string): ZoneConfig => BUILT_IN_ZONES.find((z) => z.id === id)!;
 const none = {passports: [], residences: []};
@@ -158,9 +158,73 @@ describe('PASSPORT_RULES', () => {
         }
     });
 
-    it('has at most one constraint per cell until combined constraints are supported', () => {
+    it('puts the per-visit rule first in combined cells, so the counter shows the current visit', () => {
         for (const cells of [...Object.values(PASSPORT_RULES), ...Object.values(PASSPORT_OVERRIDES)]) {
-            for (const cell of Object.values(cells ?? {})) expect(cell!.constraints.length).toBeLessThanOrEqual(1);
+            for (const cell of Object.values(cells ?? {})) {
+                if (cell!.constraints.length > 1) expect(cell!.constraints[0].kind).toBe('per_visit');
+            }
         }
+    });
+});
+
+describe('Eurasian zones added 2026-10-16', () => {
+    const access = (id: string, passport: string) => resolveZoneAccess(zone(id), {passports: [passport], residences: []});
+
+    it('has a rule for every passport group in every new zone', () => {
+        const ids = ['montenegro', 'serbia', 'albania', 'north_macedonia', 'bosnia', 'kosovo', 'ireland', 'armenia',
+            'azerbaijan', 'kazakhstan', 'kyrgyzstan', 'uzbekistan', 'thailand', 'vietnam', 'indonesia', 'malaysia',
+            'japan', 'south_korea'];
+        for (const id of ids) {
+            expect(zone(id)).toBeDefined();
+            for (const group of Object.keys(PASSPORT_RULES) as (keyof typeof PASSPORT_RULES)[]) {
+                expect([id, group, PASSPORT_RULES[group][id]?.mode]).not.toEqual([id, group, undefined]);
+            }
+        }
+    });
+
+    it('gives Ukrainians 90/180 in Montenegro and 30/60 in Bosnia', () => {
+        expect(access('montenegro', 'UA').constraints[0]).toMatchObject({kind: 'rolling_window', maxStayDays: 90, windowSizeDays: 180});
+        expect(access('bosnia', 'UA').constraints[0]).toMatchObject({maxStayDays: 30, windowSizeDays: 60});
+    });
+
+    it('gives EU and UK citizens free movement in Ireland', () => {
+        expect(access('ireland', 'DE').mode).toBe('free');
+        expect(access('ireland', 'GB').mode).toBe('free');
+        expect(access('ireland', 'US').constraints[0]).toMatchObject({kind: 'per_visit', maxStayDays: 90});
+    });
+
+    it('splits EU passports in Vietnam between exemption and e-visa', () => {
+        expect(access('vietnam', 'DE').constraints[0].maxStayDays).toBe(45);
+        expect(access('vietnam', 'PT').requires).toContain('evisa');
+    });
+
+    it('requires a visa for Ukrainians in Japan and Korea', () => {
+        expect(access('japan', 'UA').mode).toBe('visa_required');
+        expect(access('south_korea', 'UA').mode).toBe('visa_required');
+    });
+});
+
+describe('combined rules end to end', () => {
+    const kz = (id: string, entryDate: string, exitDate: string | null): Trip =>
+        ({id, zoneId: 'kazakhstan', countryCode: 'KZ', entryDate, exitDate});
+    const trips = [
+        kz('1', '2025-12-01', '2025-12-25'), kz('2', '2026-01-01', '2026-01-25'),
+        kz('3', '2026-02-01', '2026-02-25'), kz('4', '2026-03-01', null),
+    ];
+
+    it('passes both Kazakhstan rules from the passport table to the calculator', () => {
+        const ctx = zoneContext(zone('kazakhstan'), trips, {passports: ['DE'], residences: []}, '2026-03-10');
+        expect(ctx.rules).toMatchObject({kind: 'per_visit', maxStayDays: 30, also: [{kind: 'rolling_window', maxStayDays: 90}]});
+        expect(findExitDeadline(ctx.trips, 'kazakhstan', '2026-03-10', ctx.rules)).toBe('2026-03-15');
+    });
+
+    it('applies the zone default pair when no passport is set', () => {
+        const ctx = zoneContext(zone('kazakhstan'), trips, none, '2026-03-10');
+        expect(calculateCompliance(ctx.trips, 'kazakhstan', '2026-03-10', ctx.rules).daysRemaining).toBe(5);
+    });
+
+    it('keeps a single rule for Ukrainians (90/180 only)', () => {
+        const ctx = zoneContext(zone('kazakhstan'), trips, {passports: ['UA'], residences: []}, '2026-03-10');
+        expect(ctx.rules.also).toBeUndefined();
     });
 });

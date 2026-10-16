@@ -9,7 +9,7 @@ import { countryCodeToFlag, countryName } from '../../constants/countries';
 import { NO_ZONE } from '../../constants/zones';
 import type { Trip } from '../../types/Trip';
 import { buildPresenceSet } from '../../core/schengenCalculator';
-import { isPerVisit, todayIso, toneFor, tripDaysCount, windowUsage } from '../../core/zoneAnalytics';
+import { isPerVisit, todayIso, toneForUsage, tripDaysCount, windowUsage } from '../../core/zoneAnalytics';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useThemedStyles } from '../../hooks/useThemedStyles';
 import { useFormatters } from '../../hooks/useFormatters';
@@ -118,7 +118,7 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
     return {
       title: free ? t('form.impactZone', {zone: zoneLabel.name(zone)}) : t('form.impact', {rule: zoneLabel.rule(zone)}),
       free,
-      tone: toneFor(usage.daysUsed, rules.maxStayDays, buffer),
+      tone: toneForUsage(usage, buffer),
       used: usage.daysUsed,
       max: rules.maxStayDays,
       remaining: fmt.days(usage.daysRemaining),
@@ -139,7 +139,7 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
     const usage = windowUsage(presence, date, rules);
     return {
       ok: !usage.isViolation,
-      days: usage.isViolation ? usage.daysUsed - rules.maxStayDays : usage.daysRemaining,
+      days: usage.isViolation ? usage.overageDays : usage.daysRemaining,
       zoneName: zoneLabel.short(zone),
     };
   };

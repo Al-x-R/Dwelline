@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { COUNTRIES, countryCodeToFlag, type Country } from '../../constants/countries';
@@ -26,12 +26,17 @@ export function CountryPickerSheet({visible, title, onSelect, onClose, onClear, 
   const theme = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const {t, lang} = useT();
-  const {allZones} = useZones();
+  const {allZones, activeZones} = useZones();
   const zoneLabel = useZoneLabel();
   const [query, setQuery] = useState('');
   const [zoneFilter, setZoneFilter] = useState<string | null>(null);
 
-  const filterZones = useMemo(() => allZones.filter((z) => z.isImplemented), [allZones]);
+  // Tracked zones first: with all built-in zones the filter is a long scrolling row.
+  const filterZones = useMemo(() => {
+    const active = new Set(activeZones.map((z) => z.id));
+    const implemented = allZones.filter((z) => z.isImplemented);
+    return [...implemented.filter((z) => active.has(z.id)), ...implemented.filter((z) => !active.has(z.id))];
+  }, [allZones, activeZones]);
 
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -73,7 +78,13 @@ export function CountryPickerSheet({visible, title, onSelect, onClose, onClear, 
         autoCorrect={false}
         clearButtonMode="while-editing"
       />
-      <View style={styles.chips}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipsScroll}
+        contentContainerStyle={styles.chips}
+        keyboardShouldPersistTaps="handled"
+      >
         {[null, ...filterZones.map((z) => z.id)].map((id) => {
           const zone = filterZones.find((z) => z.id === id);
           const active = zoneFilter === id;
@@ -91,7 +102,7 @@ export function CountryPickerSheet({visible, title, onSelect, onClose, onClear, 
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
       {onClear ? (
         <Pressable
           style={({pressed}) => [styles.row, pressed && styles.pressed]}
@@ -136,7 +147,8 @@ export function CountryPickerSheet({visible, title, onSelect, onClose, onClear, 
 
 function createStyles({colors}: AppTheme) {
   return StyleSheet.create({
-    chips: {flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginVertical: space.gutterSm},
+    chipsScroll: {flexGrow: 0, marginHorizontal: -space.md, marginVertical: space.gutterSm},
+    chips: {gap: space.sm, paddingHorizontal: space.md},
     chip: {
       minHeight: 32, justifyContent: 'center', paddingHorizontal: 12, borderRadius: radius.full,
       backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border,

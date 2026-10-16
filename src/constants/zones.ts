@@ -1,5 +1,5 @@
 import { SCHENGEN_CODES } from './countries';
-import type { StayRuleKind } from '../core/schengenCalculator';
+import type { StayRuleKind, StayRules } from '../core/schengenCalculator';
 
 export interface ZoneConfig {
     id: string;
@@ -12,6 +12,7 @@ export interface ZoneConfig {
     isImplemented: boolean;       // whether verified, exact logic exists yet
     isCustom?: boolean;
     countryCodes: string[];       // ISO codes of countries whose days count toward the zone
+    alsoRules?: StayRules[];      // extra rules that must hold at the same time (e.g. 30 per visit AND 90/180)
 }
 
 // Country outside tracked zones: the segment stays in the route but does not consume limits.
@@ -100,6 +101,205 @@ export const BUILT_IN_ZONES: ZoneConfig[] = [
         flag: '🇬🇧',
         ruleType: 'per_visit',
         maxStayDays: 180,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    // Europe outside Schengen. Defaults are the rule for most visa-exempt passports; see passportRules for the rest.
+    {
+        id: 'montenegro',
+        countryCodes: ['ME'],
+        name: 'Черногория',
+        flag: '🇲🇪',
+        ruleType: 'rolling_window',
+        windowSizeDays: 180,
+        maxStayDays: 90,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    {
+        id: 'serbia',
+        countryCodes: ['RS'],
+        name: 'Сербия',
+        flag: '🇷🇸',
+        ruleType: 'rolling_window',
+        windowSizeDays: 180,
+        maxStayDays: 90,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    {
+        id: 'albania',
+        countryCodes: ['AL'],
+        name: 'Албания',
+        flag: '🇦🇱',
+        ruleType: 'rolling_window',
+        windowSizeDays: 180,
+        maxStayDays: 90,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    {
+        id: 'north_macedonia',
+        countryCodes: ['MK'],
+        name: 'Северная Македония',
+        flag: '🇲🇰',
+        ruleType: 'rolling_window',
+        windowSizeDays: 180,
+        maxStayDays: 90,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    {
+        id: 'bosnia',
+        countryCodes: ['BA'],
+        name: 'Босния и Герцеговина',
+        flag: '🇧🇦',
+        ruleType: 'rolling_window',
+        windowSizeDays: 180,
+        maxStayDays: 90,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    {
+        id: 'kosovo',
+        countryCodes: ['XK'],
+        name: 'Косово',
+        flag: '🇽🇰',
+        ruleType: 'rolling_window',
+        windowSizeDays: 180,
+        maxStayDays: 90,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    {
+        // Outside Schengen: permission to land for up to 90 days per visit, no rolling window.
+        id: 'ireland',
+        countryCodes: ['IE'],
+        name: 'Ирландия',
+        flag: '🇮🇪',
+        ruleType: 'per_visit',
+        maxStayDays: 90,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    // Caucasus and Central Asia.
+    {
+        // "180 days in a year": counting isn't specified officially, so the stricter rolling year is used.
+        id: 'armenia',
+        countryCodes: ['AM'],
+        name: 'Армения',
+        flag: '🇦🇲',
+        ruleType: 'rolling_window',
+        windowSizeDays: 365,
+        maxStayDays: 180,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    {
+        // Most passports: ASAN e-visa, up to 30 days.
+        id: 'azerbaijan',
+        countryCodes: ['AZ'],
+        name: 'Азербайджан',
+        flag: '🇦🇿',
+        ruleType: 'per_visit',
+        maxStayDays: 30,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    {
+        // Most passports: 30 days per visit and no more than 90 within any 180.
+        id: 'kazakhstan',
+        countryCodes: ['KZ'],
+        name: 'Казахстан',
+        flag: '🇰🇿',
+        ruleType: 'per_visit',
+        maxStayDays: 30,
+        alsoRules: [{kind: 'rolling_window', windowSizeDays: 180, maxStayDays: 90}],
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    {
+        id: 'kyrgyzstan',
+        countryCodes: ['KG'],
+        name: 'Кыргызстан',
+        flag: '🇰🇬',
+        ruleType: 'rolling_window',
+        windowSizeDays: 60,
+        maxStayDays: 30,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    {
+        id: 'uzbekistan',
+        countryCodes: ['UZ'],
+        name: 'Узбекистан',
+        flag: '🇺🇿',
+        ruleType: 'per_visit',
+        maxStayDays: 30,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    // Asia.
+    {
+        // Visa exemption is 30 days (extendable once by 30 at immigration).
+        id: 'thailand',
+        countryCodes: ['TH'],
+        name: 'Таиланд',
+        flag: '🇹🇭',
+        ruleType: 'per_visit',
+        maxStayDays: 30,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    {
+        // 45 days for exempt passports; others use a 90-day e-visa.
+        id: 'vietnam',
+        countryCodes: ['VN'],
+        name: 'Вьетнам',
+        flag: '🇻🇳',
+        ruleType: 'per_visit',
+        maxStayDays: 45,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    {
+        // Visa on arrival / e-VOA: 30 days, extendable once by 30.
+        id: 'indonesia',
+        countryCodes: ['ID'],
+        name: 'Индонезия',
+        flag: '🇮🇩',
+        ruleType: 'per_visit',
+        maxStayDays: 30,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    {
+        id: 'malaysia',
+        countryCodes: ['MY'],
+        name: 'Малайзия',
+        flag: '🇲🇾',
+        ruleType: 'per_visit',
+        maxStayDays: 90,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    {
+        id: 'japan',
+        countryCodes: ['JP'],
+        name: 'Япония',
+        flag: '🇯🇵',
+        ruleType: 'per_visit',
+        maxStayDays: 90,
+        isMultiCountry: false,
+        isImplemented: true,
+    },
+    {
+        id: 'south_korea',
+        countryCodes: ['KR'],
+        name: 'Южная Корея',
+        flag: '🇰🇷',
+        ruleType: 'per_visit',
+        maxStayDays: 90,
         isMultiCountry: false,
         isImplemented: true,
     },

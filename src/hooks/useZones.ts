@@ -1,11 +1,16 @@
 import { useCallback, useMemo } from 'react';
 
 import { BUILT_IN_ZONES, NO_ZONE, type ZoneConfig } from '../constants/zones';
+import { allRules, type StayRules } from '../core/schengenCalculator';
 import { resolveZoneAccess } from '../core/zoneAccess';
+import { zoneRules } from '../core/zoneAnalytics';
 import { useT, type TranslationKey } from '../i18n';
 import { useSettingsStore } from '../store/settingsStore';
 import { useZonesStore } from '../store/zonesStore';
 import { useTravelDocuments } from './useZoneContext';
+
+// Zones whose full name is too long for chips and pills.
+const SHORT_NAME_IDS = new Set(['schengen', 'north_macedonia', 'bosnia', 'south_korea']);
 
 export function zoneIdForCountry(code: string, zones: ZoneConfig[]): string {
   // Custom zones take precedence over built-in ones — they were created explicitly.
@@ -42,25 +47,37 @@ export function useZoneLabel() {
   );
   const short = useCallback(
     (zone: ZoneConfig | undefined | null): string =>
-      zone?.id === 'schengen' ? t('zoneShort.schengen') : name(zone),
+      zone && !zone.isCustom && SHORT_NAME_IDS.has(zone.id) ? t(`zoneShort.${zone.id}` as TranslationKey) : name(zone),
     [name, t]
   );
   const docs = useTravelDocuments();
-  // Rule as it applies to the user's documents, e.g. "90/180", "30 d/visit", "No limit".
+  // One rule, e.g. "90/180", "30 d/visit", "6 months/visit".
+  const formatRule = useCallback(
+    (r: StayRules): string => {
+      if (r.kind === 'per_visit') {
+        return r.maxStayMonths
+          ? t('zone.rulePerVisitMonths', {months: r.maxStayMonths})
+          : t('zone.rulePerVisit', {max: r.maxStayDays});
+      }
+      return t('zone.rule', {max: r.maxStayDays, window: r.windowSizeDays});
+    },
+    [t]
+  );
+  // Rule as it applies to the user's documents, e.g. "90/180", "30 d/visit · 90/180", "No limit".
   const rule = useCallback(
     (zone: ZoneConfig | undefined | null): string => {
       if (!zone) return t('zone.rule', {max: 90, window: 180});
       const access = resolveZoneAccess(zone, docs);
       if (access.mode === 'free') return t('zone.ruleFree');
-      const r = access.constraints[0];
-      if (r?.kind === 'per_visit') {
-        return r.maxStayMonths
-          ? t('zone.rulePerVisitMonths', {months: r.maxStayMonths})
-          : t('zone.rulePerVisit', {max: r.maxStayDays});
-      }
-      return t('zone.rule', {max: r?.maxStayDays ?? 90, window: r?.windowSizeDays ?? 180});
+      const rules = access.constraints.length ? access.constraints.flatMap(allRules) : allRules(zoneRules(zone));
+      return rules.map(formatRule).join(' · ');
     },
-    [t, docs]
+    [t, docs, formatRule]
   );
-  return {name, short, rule};
+  // "Limited by the 90/180 rule" when an extra rule is stricter than the main one right now.
+  const limitedBy = useCallback(
+    (r: StayRules | null | undefined): string | null => (r ? t('zone.limitedBy', {rule: formatRule(r)}) : null),
+    [t, formatRule]
+  );
+  return {name, short, rule, formatRule, limitedBy};
 }

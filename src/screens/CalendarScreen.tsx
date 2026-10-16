@@ -14,7 +14,7 @@ import { useT } from '../i18n';
 import { useRootNavigation } from '../navigation/types';
 import { useTripsStore } from '../store/tripsStore';
 import { useSettingsStore } from '../store/settingsStore';
-import { dayInfo, isPerVisit, presenceFor, todayIso, toneFor, tripDaysCount, windowUsage } from '../core/zoneAnalytics';
+import { dayInfo, isPerVisit, presenceFor, todayIso, toneForUsage, tripDaysCount, windowUsage } from '../core/zoneAnalytics';
 import { AppHeader } from '../components/app/AppHeader';
 import { FLOATING_CTA_SPACE } from '../components/app/TabBar';
 import { MonthGrid } from '../components/calendar/MonthGrid';
@@ -45,7 +45,7 @@ export default function CalendarScreen() {
     [presence, rules]
   );
   const usage = useMemo(() => windowUsage(presence, selected, rules), [presence, selected, rules]);
-  const tone = toneFor(usage.daysUsed, rules.maxStayDays, buffer);
+  const tone = toneForUsage(usage, buffer);
   const perVisit = isPerVisit(rules);
   const free = summary.access.mode === 'free';
   const toneFg = toneColors(theme.colors, tone).fg;
@@ -98,6 +98,7 @@ export default function CalendarScreen() {
               <Text style={styles.muted}>{t('calendar.scaleMin')}</Text>
               <Text style={styles.muted}>{t('calendar.scaleMax', {max: rules.maxStayDays})}</Text>
             </View>
+            {usage.limitedBy ? <Text style={styles.limited}>{zoneLabel.limitedBy(usage.limitedBy)}</Text> : null}
           </Card>
         )}
 
@@ -209,6 +210,7 @@ function createStyles({colors}: AppTheme) {
     caps: {...typography.labelCaps, color: colors.textMuted},
     capsStrong: {...typography.labelCaps, fontSize: 13},
     muted: {...typography.bodySm, color: colors.textMuted},
+    limited: {...typography.bodySm, color: colors.warning, marginTop: space.sm},
     body: {...typography.bodyMd, color: colors.textBody},
     reserveTop: {flexDirection: 'row', alignItems: 'flex-start', marginBottom: space.md},
     reserveValue: {...typography.numericMetric, color: colors.textPrimary, marginTop: space.xs, ...tabularNums},

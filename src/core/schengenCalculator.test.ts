@@ -1,4 +1,4 @@
-import { calculateCompliance, simulateTrip, findExitDeadline, type StayRules } from './schengenCalculator';
+import { calculateCompliance, simulateTrip, findExitDeadline, findMaxStayFromDate, type StayRules } from './schengenCalculator';
 import type { Trip } from '../types/Trip';
 
 describe('calculateCompliance', () => {
@@ -147,5 +147,50 @@ describe('per_visit rules', () => {
         ];
         expect(simulateTrip(trips, 'uae', '2026-02-02', 30, uae).isViolation).toBe(false);
         expect(simulateTrip(trips, 'uae', '2026-02-02', 31, uae).isViolation).toBe(true);
+    });
+});
+
+describe('combined rules (30 per visit AND 90 within 180, as in Kazakhstan)', () => {
+    const KZ: StayRules = {
+        kind: 'per_visit', windowSizeDays: 30, maxStayDays: 30,
+        also: [{kind: 'rolling_window', windowSizeDays: 180, maxStayDays: 90}],
+    };
+    const kz = (id: string, entryDate: string, exitDate: string | null): Trip =>
+        ({id, zoneId: 'kz', countryCode: 'KZ', entryDate, exitDate});
+    // Three 25-day visits: 75 of 90 days in the window used, each visit within its own 30 days.
+    const past = [kz('1', '2025-12-01', '2025-12-25'), kz('2', '2026-01-01', '2026-01-25'), kz('3', '2026-02-01', '2026-02-25')];
+
+    it('counts the current visit but takes what is left from the stricter 90/180 rule', () => {
+        const c = calculateCompliance([...past, kz('4', '2026-03-01', null)], 'kz', '2026-03-10', KZ);
+        expect(c.daysUsed).toBe(10);
+        // Visit: 20 left; window: 90 - 85 = 5 left.
+        expect(c.daysRemaining).toBe(5);
+        expect(c.isViolation).toBe(false);
+        expect(c.limitedBy).toMatchObject({kind: 'rolling_window', maxStayDays: 90});
+    });
+
+    it('reports no limiting extra rule while the main rule is the stricter one', () => {
+        const c = calculateCompliance([kz('1', '2026-03-01', null)], 'kz', '2026-03-10', KZ);
+        expect(c.daysRemaining).toBe(20);
+        expect(c.limitedBy).toBeNull();
+    });
+
+    it('flags a violation of the extra rule even when the visit is short', () => {
+        const c = calculateCompliance([...past, kz('4', '2026-03-01', null)], 'kz', '2026-03-16', KZ);
+        expect(c.daysUsed).toBe(16);
+        expect(c.isViolation).toBe(true);
+    });
+
+    it('sets the exit deadline by whichever rule runs out first', () => {
+        // Visit allows until 30 March; the window fills up on 15 March.
+        expect(findExitDeadline([...past, kz('4', '2026-03-01', null)], 'kz', '2026-03-10', KZ)).toBe('2026-03-15');
+        expect(findExitDeadline([kz('1', '2026-03-01', null)], 'kz', '2026-03-10', KZ)).toBe('2026-03-30');
+    });
+
+    it('simulates a trip against both rules', () => {
+        const sim = simulateTrip(past, 'kz', '2026-03-01', 20, KZ);
+        expect(sim.isViolation).toBe(true);
+        expect(sim.maxOverageDays).toBe(5);
+        expect(findMaxStayFromDate(past, 'kz', '2026-03-01', KZ)?.days).toBe(15);
     });
 });

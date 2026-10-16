@@ -4,6 +4,7 @@ import type { Trip, ZoneId } from '../types/Trip';
 import { calculateCompliance, findExitDeadline } from '../core/schengenCalculator';
 import { zoneRules } from '../core/zoneAnalytics';
 import { useZonesStore } from './zonesStore';
+import { BUILT_IN_ZONES, NO_ZONE, type ZoneConfig } from '../constants/zones';
 
 const STORAGE_KEY = '@dwelline/trips';
 
@@ -28,6 +29,17 @@ async function persist(trips: Trip[]) {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(trips));
 }
 
+// Trips saved as untracked whose country now belongs to a zone (e.g. a newly added built-in zone) move into it.
+// Trips already in a zone are left alone. Custom zones take precedence, as when a trip is created.
+export function assignUntrackedTrips(trips: Trip[], zones: ZoneConfig[]): Trip[] {
+    return trips.map((t) => {
+        if (t.zoneId !== NO_ZONE) return t;
+        const zone = zones.find((z) => z.isCustom && z.countryCodes.includes(t.countryCode))
+            ?? zones.find((z) => z.countryCodes.includes(t.countryCode));
+        return zone ? { ...t, zoneId: zone.id } : t;
+    });
+}
+
 export const useTripsStore = create<TripsState>((set, get) => ({
     trips: [],
     isLoaded: false,
@@ -35,8 +47,10 @@ export const useTripsStore = create<TripsState>((set, get) => ({
     loadTrips: async () => {
         try {
             const raw = await AsyncStorage.getItem(STORAGE_KEY);
-            const trips: Trip[] = raw ? JSON.parse(raw) : [];
+            const stored: Trip[] = raw ? JSON.parse(raw) : [];
+            const trips = assignUntrackedTrips(stored, [...BUILT_IN_ZONES, ...useZonesStore.getState().customZones]);
             set({ trips, isLoaded: true });
+            if (trips.some((t, i) => t !== stored[i])) await persist(trips);
         } catch (e) {
             console.error('Failed to load trips', e);
             set({ trips: [], isLoaded: true });

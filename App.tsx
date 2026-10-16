@@ -30,8 +30,8 @@ export default function App() {
   const settingsHydrated = useSettingsStore((s) => s.hydrated);
 
   useEffect(() => {
-    useTripsStore.getState().loadTrips();
-    useZonesStore.getState().loadZones();
+    // Zones first: loading trips moves untracked ones into zones, and custom zones must win there.
+    useZonesStore.getState().loadZones().then(() => useTripsStore.getState().loadTrips());
     useJourneysStore.getState().loadJourneys();
   }, []);
 

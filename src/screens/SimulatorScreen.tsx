@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,6 +23,7 @@ import {
   Toggle, toneColors, toneGradient, type Tone,
 } from '../components/ui';
 import { CountryPickerSheet } from '../components/app/CountryPickerSheet';
+import { ZonePickerSheet } from '../components/app/ZonePickerSheet';
 import type { DateImpact } from '../components/calendar/DatePickerSheet';
 import { DateRangeSheet } from '../components/calendar/DateRangeSheet';
 import { makeId } from '../features/journey/useJourneyDraft';
@@ -57,6 +58,7 @@ export default function SimulatorScreen({navigation, route}: Props) {
   const [picked, setPicked] = useState<{ zoneId: string; code: string } | null>(null);
   const [datePicker, setDatePicker] = useState(false);
   const [countryPicker, setCountryPicker] = useState(false);
+  const [zonePicker, setZonePicker] = useState(false);
   const [saved, setSaved] = useState(false);
 
   const zone = allZones.find((z) => z.id === zoneId) ?? selectedZone;
@@ -186,6 +188,7 @@ export default function SimulatorScreen({navigation, route}: Props) {
                       {result.reserveAtExit}{' '}
                       <Text style={styles.tileUnit}>{t('simulator.inReserve', {count: result.reserveAtExit})}</Text>
                     </Text>
+                    {result.limitedBy ? <Text style={styles.limited}>{zoneLabel.limitedBy(result.limitedBy)}</Text> : null}
                   </View>
                 </View>
               </View>
@@ -235,6 +238,8 @@ export default function SimulatorScreen({navigation, route}: Props) {
               setZoneId(id);
               setSaved(false);
             }}
+            moreLabel={t('simulator.allZones')}
+            onMore={() => setZonePicker(true)}
           />
 
           <Text style={[styles.label, styles.labelGap]}>{t('simulator.entryDate')}</Text>
@@ -407,6 +412,15 @@ export default function SimulatorScreen({navigation, route}: Props) {
         }}
         onClose={() => setDatePicker(false)}
       />
+      <ZonePickerSheet
+        visible={zonePicker}
+        value={zone.id}
+        onSelect={(id) => {
+          setZoneId(id);
+          setSaved(false);
+        }}
+        onClose={() => setZonePicker(false)}
+      />
       <CountryPickerSheet
         visible={countryPicker}
         onSelect={(code) => setPicked({zoneId: zone.id, code})}
@@ -436,13 +450,33 @@ interface ZoneChip {
 
 const FADE_WIDTH = 32;
 
-// Horizontally scrolling zone chips with full names; the selected one is scrolled into view on open.
+interface ZoneChipsProps {
+  zones: ZoneChip[];
+  value: string;
+  onChange: (id: string) => void;
+  // Trailing chip that opens the full zone list.
+  moreLabel: string;
+  onMore: () => void;
+}
+
+// Horizontally scrolling chips for the tracked zones plus "All zones ▾"; the selected chip is kept in view.
 // Edge fades show there is more to scroll: right while not at the end, left once scrolled.
-function ZoneChips({zones, value, onChange}: { zones: ZoneChip[]; value: string; onChange: (id: string) => void }) {
+function ZoneChips({zones, value, onChange, moreLabel, onMore}: ZoneChipsProps) {
   const theme = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const scrollRef = useRef<ScrollView>(null);
-  const scrolled = useRef(false);
+  const chipX = useRef(new Map<string, number>());
+  // Scroll to the selected chip on open and whenever the selection changes (a zone picked from the list
+  // is prepended, so its chip may be out of view).
+  const pendingScroll = useRef(true);
+  useEffect(() => {
+    pendingScroll.current = true;
+    const x = chipX.current.get(value);
+    if (x !== undefined) {
+      pendingScroll.current = false;
+      scrollRef.current?.scrollTo({x: Math.max(0, x - space.md), animated: true});
+    }
+  }, [value]);
   const [viewWidth, setViewWidth] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -471,8 +505,9 @@ function ZoneChips({zones, value, onChange}: { zones: ZoneChip[]; value: string;
               key={z.id}
               onPress={() => onChange(z.id)}
               onLayout={(e) => {
-                if (!active || scrolled.current) return;
-                scrolled.current = true;
+                chipX.current.set(z.id, e.nativeEvent.layout.x);
+                if (!active || !pendingScroll.current) return;
+                pendingScroll.current = false;
                 scrollRef.current?.scrollTo({x: Math.max(0, e.nativeEvent.layout.x - space.md), animated: false});
               }}
               style={({pressed}) => [styles.zoneChip, active && styles.zoneChipActive, pressed && styles.pressed]}
@@ -484,6 +519,15 @@ function ZoneChips({zones, value, onChange}: { zones: ZoneChip[]; value: string;
             </Pressable>
           );
         })}
+        <Pressable
+          onPress={onMore}
+          style={({pressed}) => [styles.zoneChip, styles.zoneChipMore, pressed && styles.pressed]}
+          accessibilityRole="button"
+        >
+          <Ionicons name="earth-outline" size={16} color={theme.colors.accentText}/>
+          <Text style={styles.zoneChipMoreText}>{moreLabel}</Text>
+          <Ionicons name="chevron-down" size={14} color={theme.colors.accentText}/>
+        </Pressable>
       </ScrollView>
       {showLeft ? (
         <LinearGradient colors={[solid, clear]} start={{x: 0, y: 0}} end={{x: 1, y: 0}} style={[styles.fade, styles.fadeLeft]} pointerEvents="none"/>
@@ -539,6 +583,8 @@ function createStyles({colors}: AppTheme) {
     zoneChipFlag: {fontSize: 16},
     zoneChipText: {...typography.labelMd, fontSize: 14, color: colors.textBody},
     zoneChipTextActive: {color: colors.onPrimary, fontFamily: fonts.semibold},
+    zoneChipMore: {borderStyle: 'dashed', borderColor: colors.borderStrong, backgroundColor: 'transparent'},
+    zoneChipMoreText: {...typography.labelMd, fontSize: 14, color: colors.accentText, fontFamily: fonts.semibold},
     dateRow: {
       flexDirection: 'row', alignItems: 'center', gap: space.gutterSm, padding: space.gutterSm,
       borderRadius: radius.md, backgroundColor: colors.surfaceElevated,
@@ -549,6 +595,7 @@ function createStyles({colors}: AppTheme) {
     },
     dateValue: {...typography.titleMd, color: colors.textPrimary},
     muted: {...typography.bodySm, color: colors.textMuted},
+    limited: {...typography.bodySm, fontSize: 12, color: colors.warning},
     link: {...typography.labelMd, fontSize: 13, color: colors.accentText},
     stayHeader: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
     stayPill: {

@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { space, tabularNums, typography, fonts, type AppTheme } from '../../constants/theme';
 import type { ZoneConfig } from '../../constants/zones';
+import type { StayRules } from '../../core/schengenCalculator';
 import type { ZoneTone } from '../../core/zoneAnalytics';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useThemedStyles } from '../../hooks/useThemedStyles';
@@ -15,6 +16,10 @@ interface Props {
   daysUsed: number;
   maxDays: number;
   tone: ZoneTone;
+  // What's left under every rule; defaults to maxDays - daysUsed.
+  daysRemaining?: number;
+  // Extra rule that is stricter than the main one right now.
+  limitedBy?: StayRules | null;
   // How many of the used days fall on this particular trip.
   daysInJourney?: number;
   // No limit for the user's documents: show the days without a cap.
@@ -22,13 +27,14 @@ interface Props {
   onPress?: () => void;
 }
 
-export function ZoneStatusCard({zone, daysUsed, maxDays, tone, daysInJourney, free, onPress}: Props) {
+export function ZoneStatusCard({zone, daysUsed, maxDays, tone, daysRemaining, limitedBy, daysInJourney, free, onPress}: Props) {
   const theme = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const {t} = useT();
   const zoneLabel = useZoneLabel();
   const fg = toneColors(theme.colors, tone).fg;
-  const remaining = Math.max(0, maxDays - daysUsed);
+  const remaining = daysRemaining ?? Math.max(0, maxDays - daysUsed);
+  const limitedByText = free ? null : zoneLabel.limitedBy(limitedBy);
 
   return (
     <Card onPress={onPress}>
@@ -59,6 +65,7 @@ export function ZoneStatusCard({zone, daysUsed, maxDays, tone, daysInJourney, fr
           <Text style={styles.caption}>• {t('journey.ofThemInTrip', {count: daysInJourney})}</Text>
         ) : null}
       </View>
+      {limitedByText ? <Text style={styles.limited}>{limitedByText}</Text> : null}
     </Card>
   );
 }
@@ -79,5 +86,6 @@ function createStyles({colors}: AppTheme) {
     muted: {...typography.bodyMd, color: colors.textBody},
     strong: {fontFamily: fonts.bold, color: colors.textPrimary},
     caption: {...typography.bodySm, color: colors.textMuted, flexShrink: 1, textAlign: 'right'},
+    limited: {...typography.bodySm, color: colors.warning, marginTop: space.xs},
   });
 }

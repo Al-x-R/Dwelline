@@ -11,6 +11,9 @@ export interface StayRules {
     maxStayDays: number;
     // per_visit only: limit in calendar months from entry (UK, 6 months); overrides maxStayDays.
     maxStayMonths?: number;
+    // Further rules that must hold at the same time, e.g. Kazakhstan: 30 days per visit AND 90 within 180.
+    // The main rule drives the day counter; remaining days, violations and deadlines use the strictest one.
+    also?: StayRules[];
 }
 
 export const SCHENGEN_RULES: StayRules = { kind: 'rolling_window', windowSizeDays: 180, maxStayDays: 90 };
@@ -87,6 +90,41 @@ export function usagePeriodStart(presence: Set<string>, checkDate: string, rules
         : dayjs(checkDate).subtract(rules.windowSizeDays - 1, 'day').format('YYYY-MM-DD');
 }
 
+// The main rule followed by any extra ones, each without its own extras.
+export function allRules(rules: StayRules): StayRules[] {
+    const {also, ...main} = rules;
+    return [main, ...(also ?? []).map(({also: _nested, ...r}) => r)];
+}
+
+function remainingUnder(presence: Set<string>, checkDate: string, rule: StayRules): number {
+    return stayLimit(presence, checkDate, rule) - countUsedDays(presence, checkDate, rule);
+}
+
+// Days over the strictest limit on checkDate (0 or negative = within every rule).
+export function overageOn(presence: Set<string>, checkDate: string, rules: StayRules): number {
+    return Math.max(...allRules(rules).map((r) => -remainingUnder(presence, checkDate, r)));
+}
+
+// Fewest days left under any rule on checkDate.
+export function remainingOn(presence: Set<string>, checkDate: string, rules: StayRules): number {
+    return Math.max(0, Math.min(...allRules(rules).map((r) => remainingUnder(presence, checkDate, r))));
+}
+
+// The extra rule that leaves fewer days than the main one on checkDate, or null when the main rule limits.
+export function limitingExtraRule(presence: Set<string>, checkDate: string, rules: StayRules): StayRules | null {
+    const [main, ...extra] = allRules(rules);
+    let best: StayRules | null = null;
+    let bestLeft = remainingUnder(presence, checkDate, main);
+    for (const r of extra) {
+        const left = remainingUnder(presence, checkDate, r);
+        if (left < bestLeft) {
+            best = r;
+            bestLeft = left;
+        }
+    }
+    return best;
+}
+
 export function calculateCompliance(
     trips: Trip[],
     zoneId: string,
@@ -96,19 +134,25 @@ export function calculateCompliance(
     daysUsed: number;
     daysRemaining: number;
     isViolation: boolean;
+    // Days over the strictest rule.
+    overageDays: number;
     windowStart: string;
     windowEnd: string;
+    // Extra rule that is stricter than the main one right now (daysRemaining comes from it).
+    limitedBy: StayRules | null;
 } {
     const presence = buildPresenceSet(trips, zoneId, today);
-    const daysUsed = countUsedDays(presence, today, rules);
-    const limit = stayLimit(presence, today, rules);
+    const overage = overageOn(presence, today, rules);
 
     return {
-        daysUsed,
-        daysRemaining: Math.max(0, limit - daysUsed),
-        isViolation: daysUsed > limit,
+        // The counter follows the main rule; what's left and violations follow every rule.
+        daysUsed: countUsedDays(presence, today, rules),
+        daysRemaining: remainingOn(presence, today, rules),
+        isViolation: overage > 0,
+        overageDays: Math.max(0, overage),
         windowStart: usagePeriodStart(presence, today, rules),
         windowEnd: today,
+        limitedBy: limitingExtraRule(presence, today, rules),
     };
 }
 
@@ -143,7 +187,7 @@ export function simulateTrip(
     while (cursor.isBefore(end) || cursor.isSame(end, 'day')) {
         const dateStr = cursor.format('YYYY-MM-DD');
         const daysUsed = countUsedDays(presence, dateStr, rules);
-        const overage = daysUsed - stayLimit(presence, dateStr, rules);
+        const overage = overageOn(presence, dateStr, rules);
         if (overage > maxOverage) maxOverage = overage;
 
         dailyStatus.push({ date: dateStr, daysUsed, isViolation: overage > 0 });
@@ -170,8 +214,7 @@ export function findExitDeadline(
     for (let i = 0; i < SEARCH_HORIZON_DAYS; i++) {
         const dateStr = cursor.format('YYYY-MM-DD');
         const presence = buildPresenceSet(trips, zoneId, dateStr);
-        const daysUsed = countUsedDays(presence, dateStr, rules);
-        if (daysUsed > stayLimit(presence, dateStr, rules)) {
+        if (overageOn(presence, dateStr, rules) > 0) {
             return cursor.subtract(1, 'day').format('YYYY-MM-DD');
         }
         cursor = cursor.add(1, 'day');
@@ -199,9 +242,7 @@ export function findMaxStayFromDate(
             exitDate: dateStr,
         };
         const presence = buildPresenceSet([...trips, hypotheticalTrip], zoneId, dateStr);
-        const daysUsed = countUsedDays(presence, dateStr, rules);
-
-        if (daysUsed > stayLimit(presence, dateStr, rules)) break;
+        if (overageOn(presence, dateStr, rules) > 0) break;
 
         lastSafeDate = dateStr;
         daysCount = i + 1;

@@ -7,7 +7,7 @@ import { radius, space, tabularNums, typography, fonts, type AppTheme } from '..
 import { countryCodeToFlag, countryName } from '../constants/countries';
 import { NO_ZONE } from '../constants/zones';
 import { calculateCompliance } from '../core/schengenCalculator';
-import { toneFor, tripDaysCount, type ZoneTone } from '../core/zoneAnalytics';
+import { toneForUsage, tripDaysCount, type ZoneTone } from '../core/zoneAnalytics';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useThemedStyles } from '../hooks/useThemedStyles';
 import { useFormatters } from '../hooks/useFormatters';
@@ -74,7 +74,9 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
         rules,
         daysUsed: c.daysUsed,
         freedOnDelete: c.daysUsed - withoutJourney.daysUsed,
-        tone: toneFor(c.daysUsed, rules.maxStayDays, buffer),
+        tone: toneForUsage(c, buffer),
+        daysRemaining: c.daysRemaining,
+        limitedBy: c.limitedBy,
         free: ctx.access.mode === 'free',
       }];
     });
@@ -190,6 +192,8 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
                       zone={z.zone}
                       daysUsed={z.daysUsed}
                       maxDays={z.rules.maxStayDays}
+                      daysRemaining={z.daysRemaining}
+                      limitedBy={z.limitedBy}
                       tone={z.tone}
                       free={z.free}
                       daysInJourney={zoneDays.get(z.zone.id) ?? 0}

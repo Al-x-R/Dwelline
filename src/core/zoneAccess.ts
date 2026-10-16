@@ -135,7 +135,8 @@ export interface ZoneContext {
 
 export function zoneContext(zone: ZoneConfig, trips: Trip[], docs: TravelDocuments, today: string = todayIso()): ZoneContext {
   const access = resolveZoneAccess(zone, docs, today);
-  // Every table cell has a single constraint today (enforced by a test); combined ones need all of them evaluated.
-  const rules = access.constraints[0] ?? zoneRules(zone);
+  // All constraints hold at once: the first one drives the counter, the rest ride along as extra rules.
+  const [main, ...extra] = access.constraints;
+  const rules = main ? (extra.length ? {...main, also: extra} : main) : zoneRules(zone);
   return {access, rules, trips: applyExemptions(trips, access.exemptions, today)};
 }

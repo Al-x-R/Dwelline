@@ -8,6 +8,9 @@ import {
   countUsedDays,
   findExitDeadline,
   findMaxStayFromDate,
+  limitingExtraRule,
+  overageOn,
+  remainingOn,
   SCHENGEN_RULES,
   simulateTrip,
   usagePeriodStart,
@@ -21,15 +24,17 @@ export type ZoneTone = 'safe' | 'warning' | 'danger';
 export type ZoneRules = StayRules;
 
 export function zoneRules(zone: ZoneConfig | undefined): ZoneRules {
+  const also = zone?.alsoRules?.length ? {also: zone.alsoRules} : {};
   if (zone?.ruleType === 'per_visit') {
     const maxStayDays = zone.maxStayDays ?? SCHENGEN_RULES.maxStayDays;
     // No rolling window: windowSizeDays only mirrors the limit so window-based math stays bounded.
-    return {kind: 'per_visit', windowSizeDays: maxStayDays, maxStayDays};
+    return {kind: 'per_visit', windowSizeDays: maxStayDays, maxStayDays, ...also};
   }
   return {
     kind: 'rolling_window',
     windowSizeDays: zone?.windowSizeDays ?? SCHENGEN_RULES.windowSizeDays,
     maxStayDays: zone?.maxStayDays ?? SCHENGEN_RULES.maxStayDays,
+    ...also,
   };
 }
 
@@ -47,13 +52,22 @@ export function toneFor(daysUsed: number, maxStayDays: number, bufferDays: numbe
   return 'safe';
 }
 
+// Tone from a result that already accounts for every rule (combined rules can leave fewer days than the counter shows).
+export function toneForUsage(usage: { isViolation: boolean; daysRemaining: number }, bufferDays: number): ZoneTone {
+  if (usage.isViolation) return 'danger';
+  return usage.daysRemaining <= bufferDays ? 'warning' : 'safe';
+}
+
 export interface ZoneSummary {
   rules: ZoneRules;
   daysUsed: number;
   daysRemaining: number;
   isViolation: boolean;
+  overageDays: number;
   windowStart: string;
   windowEnd: string;
+  // Extra rule that is stricter than the main one right now.
+  limitedBy: StayRules | null;
   tone: ZoneTone;
   // Nearest date when the oldest day in the window stops counting (rolling_window only).
   nextRollOff: string | null;
@@ -94,7 +108,7 @@ export function summarizeZone(
   return {
     rules,
     ...compliance,
-    tone: toneFor(compliance.daysUsed, rules.maxStayDays, bufferDays),
+    tone: toneForUsage(compliance, bufferDays),
     nextRollOff: rolling && earliestInWindow ? dayjs(earliestInWindow).add(rules.windowSizeDays, 'day').format(ISO) : null,
     fullReset: rolling && latestPast ? dayjs(latestPast).add(rules.windowSizeDays, 'day').format(ISO) : null,
     exitDeadline: findExitDeadline(trips, zoneId, today, rules),
@@ -121,13 +135,15 @@ export function dayInfo(presence: Set<string>, date: string, rules: ZoneRules): 
 }
 
 export function windowUsage(presence: Set<string>, date: string, rules: ZoneRules) {
-  const daysUsed = countUsedDays(presence, date, rules);
   return {
-    daysUsed,
-    daysRemaining: Math.max(0, rules.maxStayDays - daysUsed),
-    isViolation: daysUsed > rules.maxStayDays,
+    daysUsed: countUsedDays(presence, date, rules),
+    daysRemaining: remainingOn(presence, date, rules),
+    isViolation: overageOn(presence, date, rules) > 0,
+    // Days over the strictest rule.
+    overageDays: Math.max(0, overageOn(presence, date, rules)),
     windowStart: usagePeriodStart(presence, date, rules),
     windowEnd: date,
+    limitedBy: limitingExtraRule(presence, date, rules),
   };
 }
 
@@ -144,6 +160,8 @@ export interface SimulationResult {
   usedBeforeTrip: number;
   freedDuringTrip: number;
   firstRollOffDate: string | null;
+  // Extra rule that is stricter than the main one at exit (reserveAtExit comes from it).
+  limitedBy: StayRules | null;
 }
 
 export function simulateStay(
@@ -159,6 +177,8 @@ export function simulateStay(
   const maxStay = findMaxStayFromDate(trips, zoneId, entryDate, rules);
 
   const existing = buildPresenceSet(trips, zoneId, entryDate);
+  const withTrip = new Set(existing);
+  for (const day of simulation.dailyStatus) withTrip.add(day.date);
   const lastDay = simulation.dailyStatus[simulation.dailyStatus.length - 1];
   const daysUsedAtExit = lastDay?.daysUsed ?? 0;
   const dayBeforeEntry = dayjs(entryDate).subtract(1, 'day').format(ISO);
@@ -184,7 +204,7 @@ export function simulateStay(
     isViolation: simulation.isViolation,
     overageDays: simulation.maxOverageDays,
     daysUsedAtExit,
-    reserveAtExit: Math.max(0, rules.maxStayDays - daysUsedAtExit),
+    reserveAtExit: remainingOn(withTrip, exitDate, rules),
     maxContinuousDays: maxStay?.days ?? 0,
     criticalExitDate: maxStay?.date ?? null,
     windowStartAtExit: perVisit
@@ -193,6 +213,7 @@ export function simulateStay(
     usedBeforeTrip,
     freedDuringTrip: perVisit ? 0 : Math.max(0, usedAtEntry - usedBeforeTrip),
     firstRollOffDate,
+    limitedBy: limitingExtraRule(withTrip, exitDate, rules),
   };
 }
 

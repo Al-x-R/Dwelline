@@ -117,6 +117,8 @@ export default function ReportsScreen() {
               zone={zone}
               daysUsed={summary.daysUsed}
               maxDays={summary.rules.maxStayDays}
+              daysRemaining={summary.daysRemaining}
+              limitedBy={summary.limitedBy}
               tone={summary.tone}
               free={free}
               onPress={() => {

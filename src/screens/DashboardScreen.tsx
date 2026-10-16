@@ -7,7 +7,7 @@ import { countryName } from '../constants/countries';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useThemedStyles } from '../hooks/useThemedStyles';
 import { useFormatters } from '../hooks/useFormatters';
-import { useZones } from '../hooks/useZones';
+import { useZoneLabel, useZones } from '../hooks/useZones';
 import { isPerVisit } from '../core/zoneAnalytics';
 import { useZoneSummary } from '../hooks/useZoneSummary';
 import { useT } from '../i18n';
@@ -30,6 +30,7 @@ export default function DashboardScreen() {
   const fmt = useFormatters();
   const {t, lang} = useT();
   const {selectedZone} = useZones();
+  const zoneLabel = useZoneLabel();
   const summary = useZoneSummary(selectedZone);
   const journeys = useJourneyList();
 
@@ -71,9 +72,10 @@ export default function DashboardScreen() {
                 <Text style={[styles.statusTitle, {color: toneFg}]}>{t(`dashboard.statusTitle.${tone}`)}</Text>
                 <Text style={styles.statusSub}>
                   {summary.isViolation
-                    ? t('dashboard.overstay', {count: daysUsed - rules.maxStayDays})
+                    ? t('dashboard.overstay', {count: summary.overageDays})
                     : t('dashboard.remaining', {count: daysRemaining})}
                 </Text>
+                {summary.limitedBy ? <Text style={styles.statusSub}>{zoneLabel.limitedBy(summary.limitedBy)}</Text> : null}
               </View>
               <View style={styles.freeBox}>
                 <Text style={styles.freeText}>{t('dashboard.free', {percent: freePercent})}</Text>
