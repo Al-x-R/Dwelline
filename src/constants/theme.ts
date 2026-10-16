@@ -257,3 +257,47 @@ export const tabularNums: TextStyle = {fontVariant: ['tabular-nums']};
 
 // Palette for telling zones apart in lists and charts.
 export const ZONE_PALETTE = ['#6366F1', '#F59E0B', '#10B981', '#A855F7', '#EC4899', '#14B8A6', '#3B82F6'];
+
+// Shareable route poster and map: one fixed dark look in both themes so the image reads the same in any feed.
+export const POSTER = {
+  canvas: '#080C14',
+  mapGlow: '#1E293B',
+  panel: '#111726',
+  panelLight: '#1B2438',
+  topo: '#334155',
+  topoStrong: '#475569',
+  coast: '#0EA5E9',
+  text: '#F8FAFC',
+  textMuted: 'rgba(248, 250, 252, 0.64)',
+  textFaint: 'rgba(248, 250, 252, 0.4)',
+  outbound: '#38BDF8',
+  inbound: '#F59E0B',
+  main: '#34D399',
+  mainSoft: 'rgba(52, 211, 153, 0.18)',
+  mainLabel: 'rgba(6, 78, 59, 0.92)',
+  start: '#F59E0B',
+  startSoft: 'rgba(245, 158, 11, 0.22)',
+  label: 'rgba(15, 23, 42, 0.92)',
+  card: 'rgba(15, 23, 42, 0.97)',
+  labelBorder: 'rgba(100, 116, 139, 0.55)',
+  chip: 'rgba(255, 255, 255, 0.06)',
+  chipBorder: 'rgba(255, 255, 255, 0.1)',
+  control: 'rgba(255, 255, 255, 0.1)',
+  dotHole: '#0F172A',
+  danger: '#F87171',
+  eyebrow: 'rgba(56, 189, 248, 0.1)',
+  eyebrowBorder: 'rgba(56, 189, 248, 0.3)',
+  mainBorder: 'rgba(52, 211, 153, 0.3)',
+  stat: 'rgba(0, 0, 0, 0.3)',
+  statHighlight: 'rgba(6, 78, 59, 0.3)',
+  // Leg colours by transport.
+  transport: {
+    plane: '#38BDF8',
+    bus: '#F59E0B',
+    car: '#FB923C',
+    train: '#A78BFA',
+    ferry: '#2DD4BF',
+    walk: '#A3E635',
+    other: '#94A3B8',
+  },
+};

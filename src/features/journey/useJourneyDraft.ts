@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 import type { Journey } from '../../types/Journey';
 import type { TransportMode, Trip } from '../../types/Trip';
 import type { ZoneConfig } from '../../constants/zones';
-import { countryCodeToFlag, countryName } from '../../constants/countries';
+import { countryCodeToFlag, countryName, flagToCountryCode } from '../../constants/countries';
 import { zoneIdForCountry } from '../../hooks/useZones';
 import type { Language } from '../../i18n/types';
 import { legDurationMinutes } from '../../utils/format';
@@ -29,12 +29,17 @@ export interface JourneyDraft {
   turnaroundIndex: number | null;
   destinationCode: string | null;
   exitDate: string | null;
+  destinationArrivalDate: string | null;
   destinationArrivalTime: string | null;
 }
 
 export type PointRole = 'transit' | 'main' | 'return';
 
 export interface Leg {
+  key: string;
+  fromCode: string | null;
+  toCode: string | null;
+  transport?: TransportMode;
   minutes: number | null;
   isReturn: boolean;
 }
@@ -58,6 +63,7 @@ export function emptyDraft(): JourneyDraft {
     turnaroundIndex: null,
     destinationCode: null,
     exitDate: null,
+    destinationArrivalDate: null,
     destinationArrivalTime: null,
   };
 }
@@ -67,9 +73,10 @@ export function draftFromJourney(journey: Journey, trips: Trip[]): JourneyDraft 
   return {
     name: journey.name,
     nameEdited: true,
-    originCode: journey.originCountryCode ?? null,
+    // Older journeys stored only the name and flag.
+    originCode: journey.originCountryCode ?? flagToCountryCode(journey.originCountryFlag),
     originDate: journey.originDepartureDate ?? null,
-    originTime: journey.originDepartureTime,
+    originTime: journey.originDepartureTime ?? null,
     originTransport: (journey.originTransportMode as TransportMode | null) ?? undefined,
     points: trips.length
       ? trips.map((t) => ({
@@ -82,9 +89,10 @@ export function draftFromJourney(journey: Journey, trips: Trip[]): JourneyDraft 
       }))
       : [emptyPoint()],
     turnaroundIndex: turnaround >= 0 ? turnaround : null,
-    destinationCode: journey.destinationCountryCode ?? null,
+    destinationCode: journey.destinationCountryCode ?? flagToCountryCode(journey.destinationCountryFlag),
     exitDate: trips[trips.length - 1]?.exitDate ?? null,
-    destinationArrivalTime: journey.destinationArrivalTime,
+    destinationArrivalDate: journey.destinationArrivalDate ?? null,
+    destinationArrivalTime: journey.destinationArrivalTime ?? null,
   };
 }
 
@@ -130,7 +138,8 @@ export function buildJourneyFields(draft: JourneyDraft, trips: Trip[], lang: Lan
     destinationCountryCode: dest,
     destinationCountryName: dest ? countryName(dest, lang) : null,
     destinationCountryFlag: dest ? countryCodeToFlag(dest) : null,
-    destinationArrivalTime: draft.destinationArrivalTime,
+    destinationArrivalDate: dest ? draft.destinationArrivalDate : null,
+    destinationArrivalTime: dest ? draft.destinationArrivalTime : null,
     turnaroundTripId: draft.turnaroundIndex !== null ? trips[draft.turnaroundIndex]?.id ?? null : null,
     tripIds: trips.map((t) => t.id),
   };
@@ -143,24 +152,61 @@ export function autoName(draft: JourneyDraft, lang: Language): string {
   return main ? countryName(main, lang) : '';
 }
 
-export function draftLegs(draft: JourneyDraft): { origin: Leg | null; points: (Leg | null)[] } {
-  const {points, turnaroundIndex} = draft;
-  const origin = draft.originCode
-    ? {
-      minutes: legDurationMinutes(draft.originDate, draft.originTime, points[0]?.arrivalDate ?? null, points[0]?.arrivalTime),
+// Legs between consecutive route nodes: origin → point 1 → … → destination.
+// Legs after the main point (turnaround, or the last point) count as the return trip.
+export function draftLegs(draft: JourneyDraft): Leg[] {
+  const {points} = draft;
+  const mainIndex = draft.turnaroundIndex ?? points.length - 1;
+  const legs: Leg[] = [];
+  if (draft.originCode && points[0]) {
+    legs.push({
+      key: 'origin',
+      fromCode: draft.originCode,
+      toCode: points[0].countryCode,
+      transport: draft.originTransport,
+      minutes: legDurationMinutes(draft.originDate, draft.originTime, points[0].arrivalDate, points[0].arrivalTime),
       isReturn: false,
-    }
-    : null;
-  const legs = points.map((p, i) => {
-    const isLast = i === points.length - 1;
-    if (isLast && !draft.destinationCode) return null;
-    const arrivalTime = isLast ? draft.destinationArrivalTime : points[i + 1].arrivalTime;
-    return {
-      minutes: legDurationMinutes(null, p.departureTime, null, arrivalTime),
-      isReturn: turnaroundIndex !== null && i >= turnaroundIndex,
-    };
+    });
+  }
+  points.forEach((p, i) => {
+    const next = points[i + 1];
+    if (!next && !draft.destinationCode) return;
+    const minutes = next
+      ? legDurationMinutes(null, p.departureTime, null, next.arrivalTime)
+      : draft.exitDate
+        ? legDurationMinutes(draft.exitDate, p.departureTime, draft.destinationArrivalDate ?? draft.exitDate, draft.destinationArrivalTime)
+        : legDurationMinutes(null, p.departureTime, null, draft.destinationArrivalTime);
+    legs.push({
+      key: p.id,
+      fromCode: p.countryCode,
+      toCode: next ? next.countryCode : draft.destinationCode,
+      transport: p.transportMode,
+      minutes,
+      isReturn: i >= mainIndex,
+    });
   });
-  return {origin, points: legs};
+  return legs;
+}
+
+export interface TravelSummary {
+  outbound: number;
+  inbound: number;
+  total: number;
+  hasReturn: boolean;
+  allKnown: boolean;
+}
+
+export function travelSummary(legs: Leg[]): TravelSummary | null {
+  const known = legs.filter((l): l is Leg & { minutes: number } => l.minutes !== null);
+  if (known.length === 0) return null;
+  const sum = (items: { minutes: number }[]) => items.reduce((acc, l) => acc + l.minutes, 0);
+  return {
+    outbound: sum(known.filter((l) => !l.isReturn)),
+    inbound: sum(known.filter((l) => l.isReturn)),
+    total: sum(known),
+    hasReturn: legs.some((l) => l.isReturn),
+    allKnown: known.length === legs.length,
+  };
 }
 
 export function stopoverMinutes(draft: JourneyDraft, index: number): number | null {

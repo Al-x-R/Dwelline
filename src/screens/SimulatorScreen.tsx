@@ -107,6 +107,7 @@ export default function SimulatorScreen({navigation, route}: Props) {
       originTransportMode: null,
       destinationCountryName: null,
       destinationCountryFlag: null,
+      destinationArrivalDate: null,
       destinationArrivalTime: null,
       turnaroundTripId: null,
       tripIds: [id],

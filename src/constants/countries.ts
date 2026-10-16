@@ -181,3 +181,12 @@ export function countryCodeToFlag(code: string): string {
     .map((c) => base + (c.charCodeAt(0) - 65));
   return String.fromCodePoint(...chars);
 }
+
+// Reverse of countryCodeToFlag: '🇺🇦' → 'UA'. Used to recover codes for journeys saved before codes were stored.
+export function flagToCountryCode(flag: string | null | undefined): string | null {
+  if (!flag) return null;
+  const points = Array.from(flag).map((c) => c.codePointAt(0)! - 0x1f1e6);
+  if (points.length !== 2 || points.some((p) => p < 0 || p > 25)) return null;
+  const code = String.fromCharCode(...points.map((p) => p + 65));
+  return findCountry(code) ? code : null;
+}

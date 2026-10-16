@@ -26,6 +26,10 @@ import { ZoneStatusCard } from '../features/zone/ZoneStatusCard';
 import {
   TRANSPORT_ICONS, daysByZone, journeyOrigin, journeyShortId, journeySpan, journeyState, journeyTrips,
 } from '../features/journey/journeyUtils';
+import { draftFromJourney, draftLegs, emptyDraft } from '../features/journey/useJourneyDraft';
+import { useRouteNodes } from '../features/journey/useRouteNodes';
+import { RouteCard } from '../features/journey/components/RouteCard';
+import { TravelTimeCard } from '../features/journey/components/TravelTimeCard';
 import { zoneContext } from '../core/zoneAccess';
 import { useTravelDocuments } from '../hooks/useZoneContext';
 
@@ -47,11 +51,15 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
   const docs = useTravelDocuments();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [posterOpen, setPosterOpen] = useState(false);
 
   const trips = useMemo(() => (journey ? journeyTrips(journey, allTrips) : []), [journey, allTrips]);
   const span = journeySpan(trips);
   const state = journeyState(span);
   const zoneDays = useMemo(() => daysByZone(trips), [trips]);
+  const draft = useMemo(() => (journey ? draftFromJourney(journey, trips) : emptyDraft()), [journey, trips]);
+  const legs = useMemo(() => (trips.length ? draftLegs(draft) : []), [draft, trips.length]);
+  const nodes = useRouteNodes(draft, legs);
 
   const zoneStatuses = useMemo(() => {
     const ids = Array.from(zoneDays.keys()).filter((id) => id !== NO_ZONE);
@@ -164,6 +172,23 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
           <EmptyState icon="map-outline" title={t('journey.noSegments')}/>
         ) : (
           <>
+            {nodes.length > 1 ? (
+              <>
+                <View style={styles.block}>
+                  <RouteCard
+                    nodes={nodes}
+                    legs={legs}
+                    title={journey.name}
+                    subtitle={datesLabel || undefined}
+                    badge={span ? fmt.days(span.days) : undefined}
+                    status={zoneStatuses.length ? {label: t(`journey.engine.${worst}`), tone: worst} : undefined}
+                    open={posterOpen}
+                    onOpenChange={setPosterOpen}
+                  />
+                </View>
+              </>
+            ) : null}
+
             {zoneStatuses.length > 0 ? (
               <>
                 <SectionHeader
@@ -186,6 +211,15 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
                 </View>
               </>
             ) : null}
+
+            <View style={styles.block}>
+              <InfoBanner
+                icon={worst === 'safe' ? 'checkmark-circle-outline' : 'warning-outline'}
+                tone={worst}
+                title={t(`journey.engine.${worst}`)}
+                text={t(`journey.engine.${worst}Text`)}
+              />
+            </View>
 
             <SectionHeader
               title={`${t('journey.segments')} • ${t('journey.segmentsTotal', {days: span ? fmt.days(span.days) : ''})}`}
@@ -230,20 +264,22 @@ export default function JourneyDetailScreen({navigation, route}: Props) {
               );
             })}
 
-            <View style={styles.block}>
-              <InfoBanner
-                icon={worst === 'safe' ? 'checkmark-circle-outline' : 'warning-outline'}
-                tone={worst}
-                title={t(`journey.engine.${worst}`)}
-                text={t(`journey.engine.${worst}Text`)}
-              />
-            </View>
+            {legs.length > 0 ? (
+              <>
+                <SectionHeader title={t('form.travelTime')} variant="title"/>
+                <TravelTimeCard legs={legs}/>
+              </>
+            ) : null}
           </>
         )}
       </ScrollView>
 
       <SafeAreaView edges={['bottom']} style={styles.footer}>
-        <IconButton icon="share-social-outline" onPress={handleShare} accessibilityLabel={t('common.share')}/>
+        <IconButton
+          icon="share-social-outline"
+          onPress={() => (nodes.length > 1 ? setPosterOpen(true) : handleShare())}
+          accessibilityLabel={t('common.share')}
+        />
         <Button
           label={t('journey.addSegment')}
           icon="add"

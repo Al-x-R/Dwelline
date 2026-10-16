@@ -10,6 +10,7 @@ export interface Journey {
   destinationCountryCode?: string | null;
   destinationCountryName: string | null;
   destinationCountryFlag: string | null;
+  destinationArrivalDate?: string | null;
   destinationArrivalTime: string | null;
   turnaroundTripId: string | null;
   tripIds: string[];
