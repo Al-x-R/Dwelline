@@ -153,12 +153,20 @@ export default function SettingsScreen({navigation}: Props) {
             subtitle={t('settings.overstayHint')}
             trailing={<Toggle value={s.overstayAlerts} onValueChange={(v) => s.setAlerts({overstayAlerts: v})} accessibilityLabel={t('settings.overstay')}/>}
           />
+          {/* Roll-off alerts ("days are back") aren't scheduled yet; the toggle returns with them. */}
           <ListRow
-            icon="refresh-outline"
-            iconTone="safe"
-            title={t('settings.rollOff')}
-            subtitle={t('settings.rollOffHint')}
-            trailing={<Toggle value={s.rollOffAlerts} onValueChange={(v) => s.setAlerts({rollOffAlerts: v})} accessibilityLabel={t('settings.rollOff')}/>}
+            icon="exit-outline"
+            iconTone="primary"
+            title={t('settings.exitReminders')}
+            subtitle={t('settings.exitRemindersHint')}
+            trailing={<Toggle value={s.exitReminders} onValueChange={(v) => s.setAlerts({exitReminders: v})} accessibilityLabel={t('settings.exitReminders')}/>}
+          />
+          <ListRow
+            icon="document-text-outline"
+            iconTone="primary"
+            title={t('settings.documentAlerts')}
+            subtitle={t('settings.documentAlertsHint')}
+            trailing={<Toggle value={s.documentAlerts} onValueChange={(v) => s.setAlerts({documentAlerts: v})} accessibilityLabel={t('settings.documentAlerts')}/>}
             last
           />
         </Card>

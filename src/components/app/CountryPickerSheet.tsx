@@ -30,6 +30,16 @@ export function CountryPickerSheet({visible, title, onSelect, onClose, onClear, 
   const zoneLabel = useZoneLabel();
   const [query, setQuery] = useState('');
   const [zoneFilter, setZoneFilter] = useState<string | null>(null);
+  const [wasVisible, setWasVisible] = useState(visible);
+
+  // Every opening starts clean, however the sheet was hidden last time.
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) {
+      setQuery('');
+      setZoneFilter(null);
+    }
+  }
 
   // Tracked zones first: with all built-in zones the filter is a long scrolling row.
   const filterZones = useMemo(() => {
@@ -57,19 +67,13 @@ export function CountryPickerSheet({visible, title, onSelect, onClose, onClear, 
       });
   }, [query, zoneFilter, allZones, lang, allowedCodes]);
 
-  const close = () => {
-    setQuery('');
-    setZoneFilter(null);
+  const select = (country: Country) => {
+    onSelect(country.code);
     onClose();
   };
 
-  const select = (country: Country) => {
-    onSelect(country.code);
-    close();
-  };
-
   return (
-    <BottomSheet visible={visible} title={title ?? t('countryPicker.title')} onClose={close} tall>
+    <BottomSheet visible={visible} title={title ?? t('countryPicker.title')} onClose={onClose} tall>
       <TextField
         icon="search"
         value={query}
@@ -108,7 +112,7 @@ export function CountryPickerSheet({visible, title, onSelect, onClose, onClear, 
           style={({pressed}) => [styles.row, pressed && styles.pressed]}
           onPress={() => {
             onClear();
-            close();
+            onClose();
           }}
         >
           <View style={styles.flag}>

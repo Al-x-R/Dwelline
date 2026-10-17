@@ -30,6 +30,10 @@ interface SettingsState {
 
   overstayAlerts: boolean;
   rollOffAlerts: boolean;
+  // Day before / after a planned exit: keeps trips matching reality.
+  exitReminders: boolean;
+  // Residence statuses about to expire.
+  documentAlerts: boolean;
 
   setOnboardingDone: (done: boolean) => void;
   setLanguage: (language: Language) => void;
@@ -39,8 +43,10 @@ interface SettingsState {
   setSafetyBufferDays: (days: number) => void;
   setPassports: (codes: string[]) => void;
   setResidences: (docs: ResidenceDoc[]) => void;
-  setAlerts: (patch: { overstayAlerts?: boolean; rollOffAlerts?: boolean }) => void;
+  setAlerts: (patch: AlertsPatch) => void;
 }
+
+type AlertsPatch = Partial<Pick<SettingsState, 'overstayAlerts' | 'rollOffAlerts' | 'exitReminders' | 'documentAlerts'>>;
 
 export const MIN_BUFFER_DAYS = 0;
 export const MAX_BUFFER_DAYS = 30;
@@ -80,6 +86,8 @@ export const useSettingsStore = create<SettingsState>()(
 
       overstayAlerts: true,
       rollOffAlerts: true,
+      exitReminders: true,
+      documentAlerts: true,
 
       setOnboardingDone: (onboardingDone) => set({onboardingDone}),
       setLanguage: (language) => set({language}),

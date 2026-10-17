@@ -1,4 +1,4 @@
-import { useNavigation, type NavigatorScreenParams } from '@react-navigation/native';
+import { createNavigationContainerRef, useNavigation, type NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 export type RootStackParamList = {
@@ -22,6 +22,9 @@ export type MainTabsParamList = {
 };
 
 export type RootNavigation = NativeStackNavigationProp<RootStackParamList>;
+
+// For navigating from outside screens, e.g. a tapped notification.
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 export function useRootNavigation() {
   return useNavigation<RootNavigation>();

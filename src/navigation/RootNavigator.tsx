@@ -7,7 +7,8 @@ import { fonts } from '../constants/theme';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useSettingsStore } from '../store/settingsStore';
 import { TabBar } from '../components/app/TabBar';
-import type { MainTabsParamList, RootStackParamList } from './types';
+import { useNotifications } from '../hooks/useNotifications';
+import { navigationRef, type MainTabsParamList, type RootStackParamList } from './types';
 
 import OnboardingScreen from '../screens/OnboardingScreen';
 import DashboardScreen from '../screens/DashboardScreen';
@@ -40,6 +41,7 @@ function MainTabs() {
 export function RootNavigator() {
   const theme = useAppTheme();
   const onboardingDone = useSettingsStore((s) => s.onboardingDone);
+  const {onNavigationReady} = useNotifications();
 
   const navTheme = useMemo<Theme>(() => {
     const base = theme.dark ? DarkTheme : DefaultTheme;
@@ -65,7 +67,7 @@ export function RootNavigator() {
   }, [theme]);
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer ref={navigationRef} theme={navTheme} onReady={onNavigationReady}>
       <RootStack.Navigator
         screenOptions={{headerShown: false}}
         initialRouteName={onboardingDone ? 'MainTabs' : 'Onboarding'}
