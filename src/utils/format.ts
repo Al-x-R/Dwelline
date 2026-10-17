@@ -42,7 +42,13 @@ export function legDurationMinutes(
   return diff > 0 ? diff : null;
 }
 
-export function formatDuration(minutes: number, t: TFunction): string {
+// Travel time stays in hours ("33 h 40 min"); `days` is for stays, where past a day minutes are noise ("2 d 5 h").
+export function formatDuration(minutes: number, t: TFunction, {days = false}: { days?: boolean } = {}): string {
+  if (days && minutes >= 24 * 60) {
+    const d = Math.floor(minutes / (24 * 60));
+    const dh = Math.floor((minutes % (24 * 60)) / 60);
+    return dh === 0 ? t('duration.days', {d}) : t('duration.daysHours', {d, h: dh});
+  }
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   if (h === 0) return t('duration.minutes', {m});

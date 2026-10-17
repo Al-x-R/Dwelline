@@ -23,25 +23,31 @@ import { CountryPickerSheet } from '../../components/app/CountryPickerSheet';
 import { DatePickerSheet, type DateImpact } from '../../components/calendar/DatePickerSheet';
 import { TimePickerSheet } from '../../components/calendar/TimePickerSheet';
 import {
-  buildTrips, pointExitDate, pointRole, stopoverMinutes, useJourneyDraft, validateDraft, type JourneyDraft,
+  buildTrips, pointBorderDate, pointDepartureDate, pointEntryDate, pointRole, stopoverMinutes, useJourneyDraft, validateDraft,
+  type JourneyDraft,
 } from './useJourneyDraft';
 import { RouteCard } from './components/RouteCard';
 import { DateTimeTile } from './components/DateTimeTile';
 import { TravelTimeCard } from './components/TravelTimeCard';
 import { useRouteNodes } from './useRouteNodes';
 import { PointCard } from './components/PointCard';
+import { BorderCrossingRow } from './components/BorderCrossingRow';
 import { ImpactCard, type ImpactRow } from './components/ImpactCard';
 import { TransportPicker } from './components/TransportPicker';
 import { zoneContext } from '../../core/zoneAccess';
 import { useTravelDocuments } from '../../hooks/useZoneContext';
 
-type CountryTarget = { kind: 'origin' } | { kind: 'destination' } | { kind: 'point'; index: number };
-type DateTarget = { kind: 'origin' } | { kind: 'arrival'; index: number } | { kind: 'exit' } | { kind: 'destination' };
+type CountryTarget = { kind: 'origin' } | { kind: 'point'; index: number };
+type DateTarget =
+  | { kind: 'origin' }
+  | { kind: 'originBorder' }
+  | { kind: 'arrival'; index: number }
+  | { kind: 'departure'; index: number }
+  | { kind: 'border'; index: number };
 type TimeTarget =
   | { kind: 'origin' }
   | { kind: 'arrival'; index: number }
-  | { kind: 'departure'; index: number }
-  | { kind: 'destination' };
+  | { kind: 'departure'; index: number };
 
 interface Props {
   mode: 'new' | 'edit';
@@ -127,12 +133,14 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
     };
   }, [draftTrips, otherTrips, allZones, selectedZone, zoneLabel, buffer, docs, fmt, t, theme.colors.textMuted]);
 
-  // Estimate for the departure date sheet: what's left in the last point's zone.
+  // Estimate for the last point's departure sheet: what's left in its zone.
+  const lastIndex = draft.points.length - 1;
   const exitImpact = (date: string): DateImpact | null => {
-    const lastPoint = draft.points[draft.points.length - 1];
+    const lastPoint = draft.points[lastIndex];
     const zone = zoneOf(lastPoint.countryCode);
     if (!zone || !completePoints) return null;
-    const ctx = zoneContext(zone, [...otherTrips, ...buildTrips({...draft, exitDate: date}, allZones)], docs);
+    const withExit = {...draft, points: draft.points.map((p, i) => (i === lastIndex ? {...p, departureDate: date} : p))};
+    const ctx = zoneContext(zone, [...otherTrips, ...buildTrips(withExit, allZones)], docs);
     if (ctx.access.mode === 'free') return null;
     const rules = ctx.rules;
     const presence = buildPresenceSet(ctx.trips, zone.id, todayIso());
@@ -170,51 +178,68 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
   };
 
   // ── Pickers ─────────────────────────────────────────────────────────
-  const dateValue =
-    dateTarget?.kind === 'origin' ? draft.originDate
-      : dateTarget?.kind === 'arrival' ? draft.points[dateTarget.index].arrivalDate
-        : dateTarget?.kind === 'exit' ? draft.exitDate
-          : dateTarget?.kind === 'destination' ? draft.destinationArrivalDate ?? draft.exitDate
-            : null;
-  const lastArrival = draft.points[draft.points.length - 1]?.arrivalDate ?? undefined;
-  const dateMin =
-    dateTarget?.kind === 'arrival' && dateTarget.index > 0
-      ? draft.points[dateTarget.index - 1].arrivalDate ?? undefined
-      : dateTarget?.kind === 'arrival' && dateTarget.index === 0
-        ? draft.originDate ?? undefined
-        : dateTarget?.kind === 'exit'
-          ? lastArrival
-          : dateTarget?.kind === 'destination'
-            ? draft.exitDate ?? lastArrival
-            : undefined;
-  const dateMax = dateTarget?.kind === 'origin' ? draft.points[0]?.arrivalDate ?? undefined : undefined;
+  const orUndef = (d: string | null | undefined) => d ?? undefined;
+  const nextArrival = (index: number) => orUndef(draft.points[index + 1]?.arrivalDate);
+  const pickerRange = (target: DateTarget | null): { value: string | null; min?: string; max?: string } => {
+    switch (target?.kind) {
+      case 'origin':
+        return {value: draft.originDate, max: orUndef(draft.points[0]?.arrivalDate)};
+      case 'originBorder':
+        return {value: draft.originBorderDate, min: orUndef(draft.originDate), max: orUndef(draft.points[0]?.arrivalDate)};
+      case 'arrival': {
+        const prev = target.index > 0 ? pointDepartureDate(draft, target.index - 1) : draft.originDate;
+        return {value: draft.points[target.index].arrivalDate, min: orUndef(prev)};
+      }
+      case 'departure':
+        return {
+          value: pointDepartureDate(draft, target.index),
+          min: orUndef(draft.points[target.index].arrivalDate),
+          max: nextArrival(target.index),
+        };
+      case 'border':
+        return {
+          value: pointBorderDate(draft, target.index),
+          min: orUndef(pointDepartureDate(draft, target.index)),
+          max: nextArrival(target.index),
+        };
+      default:
+        return {value: null};
+    }
+  };
+  const picker = pickerRange(dateTarget);
+  const exitTarget = dateTarget?.kind === 'departure' && dateTarget.index === lastIndex;
 
   const confirmDate = (date: string) => {
     if (dateTarget?.kind === 'origin') update({originDate: date});
+    if (dateTarget?.kind === 'originBorder') update({originBorderDate: date});
     if (dateTarget?.kind === 'arrival') updatePoint(dateTarget.index, {arrivalDate: date});
-    if (dateTarget?.kind === 'exit') update({exitDate: date});
-    if (dateTarget?.kind === 'destination') update({destinationArrivalDate: date});
+    if (dateTarget?.kind === 'departure') updatePoint(dateTarget.index, {departureDate: date});
+    if (dateTarget?.kind === 'border') updatePoint(dateTarget.index, {borderDate: date});
     setDateTarget(null);
+  };
+
+  // Turning "same day" off starts from the next arrival date (the usual night-crossing case), or the day after departure.
+  const firstCrossingGuess = (departure: string | null, arrival: string | null) => {
+    if (!departure) return null;
+    if (arrival && arrival > departure) return arrival;
+    return dayjs(departure).add(1, 'day').format('YYYY-MM-DD');
   };
 
   const timeValue =
     timeTarget?.kind === 'origin' ? draft.originTime
       : timeTarget?.kind === 'arrival' ? draft.points[timeTarget.index].arrivalTime ?? null
         : timeTarget?.kind === 'departure' ? draft.points[timeTarget.index].departureTime ?? null
-          : timeTarget?.kind === 'destination' ? draft.destinationArrivalTime
-            : null;
+          : null;
 
   const confirmTime = (time: string) => {
     if (timeTarget?.kind === 'origin') update({originTime: time});
     if (timeTarget?.kind === 'arrival') updatePoint(timeTarget.index, {arrivalTime: time});
     if (timeTarget?.kind === 'departure') updatePoint(timeTarget.index, {departureTime: time});
-    if (timeTarget?.kind === 'destination') update({destinationArrivalTime: time});
     setTimeTarget(null);
   };
 
   const selectCountry = (code: string) => {
     if (countryTarget?.kind === 'origin') update({originCode: code});
-    if (countryTarget?.kind === 'destination') update({destinationCode: code});
     if (countryTarget?.kind === 'point') updatePoint(countryTarget.index, {countryCode: code});
   };
 
@@ -293,6 +318,16 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
             <Text style={styles.caps}>{t('form.transport')}</Text>
             <TransportPicker value={draft.originTransport} onChange={(m) => update({originTransport: m})}/>
           </View>
+          {draft.originDate && draft.originTransport !== 'plane' ? (
+            <BorderCrossingRow
+              sameDay={!draft.originBorderDate}
+              date={draft.originBorderDate ? fmt.short(draft.originBorderDate) : null}
+              onToggleSameDay={(same) =>
+                update({originBorderDate: same ? null : firstCrossingGuess(draft.originDate, draft.points[0]?.arrivalDate ?? null)})
+              }
+              onPickDate={() => setDateTarget({kind: 'originBorder'})}
+            />
+          ) : null}
         </Card>
 
         <SectionHeader
@@ -303,12 +338,15 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
           {draft.points.map((p, i) => {
             const isLast = i === draft.points.length - 1;
             const role = pointRole(draft, i);
-            const exitDate = pointExitDate(draft, i);
+            const departure = pointDepartureDate(draft, i);
+            const entry = pointEntryDate(draft, i);
+            const exit = pointBorderDate(draft, i);
             const stop = stopoverMinutes(draft, i);
             const zoneInfo = zoneTagFor(p.countryCode);
-            const stayDays = isLast && p.arrivalDate && exitDate
-              ? dayjs(exitDate).diff(dayjs(p.arrivalDate), 'day') + 1
-              : null;
+            // Long stays show counted days; short ones show the stopover length.
+            const showStay = role === 'main' || (isLast && role !== 'final');
+            const stayDays = showStay && entry && exit ? dayjs(exit).diff(dayjs(entry), 'day') + 1 : null;
+            const canCross = role !== 'final' && !!departure && p.transportMode !== 'plane';
             return (
               <React.Fragment key={p.id}>
                 {draft.turnaroundIndex !== null && i === draft.turnaroundIndex + 1 ? <ReturnDivider label={t('form.returnRoute')}/> : null}
@@ -321,86 +359,54 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
                   zoneCaption={zoneInfo.caption}
                   arrivalDate={p.arrivalDate ? fmt.short(p.arrivalDate) : null}
                   arrivalTime={p.arrivalTime}
-                  departureDate={exitDate ? fmt.short(exitDate) : null}
+                  departureDate={departure ? fmt.short(departure) : null}
                   departureTime={p.departureTime}
                   isLast={isLast}
-                  hasOutgoing={!isLast || !!draft.destinationCode}
+                  hasOutgoing={!isLast}
                   transportMode={p.transportMode}
-                  stopover={!isLast && stop ? formatDuration(stop, t) : null}
+                  stopover={!isLast && !showStay && stop ? formatDuration(stop, t, {days: true}) : null}
                   stayLabel={stayDays ? t('form.stayValue', {count: stayDays}) : null}
                   isTurnaround={draft.turnaroundIndex === i}
-                  canTurnaround={!isLast}
+                  canTurnaround={!isLast && (draft.turnaroundIndex === null || draft.turnaroundIndex === i)}
+                  isFinal={role === 'final'}
+                  canFinal={isLast && draft.turnaroundIndex !== null && i > draft.turnaroundIndex}
                   canRemove={draft.points.length > 1}
                   onPickCountry={() => setCountryTarget({kind: 'point', index: i})}
                   onPickArrivalDate={() => setDateTarget({kind: 'arrival', index: i})}
                   onPickArrivalTime={() => setTimeTarget({kind: 'arrival', index: i})}
-                  onPickDepartureDate={() =>
-                    isLast ? setDateTarget({kind: 'exit'}) : setDateTarget({kind: 'arrival', index: i + 1})
-                  }
+                  onPickDepartureDate={() => setDateTarget({kind: 'departure', index: i})}
                   onPickDepartureTime={() => setTimeTarget({kind: 'departure', index: i})}
                   onTransport={(mode) => updatePoint(i, {transportMode: mode})}
-                  onToggleTurnaround={(on) => update({turnaroundIndex: on ? i : null})}
+                  onToggleTurnaround={(on) => update(on ? {turnaroundIndex: i} : {turnaroundIndex: null, hasFinal: false})}
+                  onToggleFinal={(on) => {
+                    // Journeys usually end back home.
+                    if (on && !p.countryCode && draft.originCode) updatePoint(i, {countryCode: draft.originCode});
+                    update({hasFinal: on});
+                  }}
+                  onClearExit={() => updatePoint(i, {departureDate: null, borderDate: null})}
+                  border={canCross ? (
+                    <BorderCrossingRow
+                      sameDay={!p.borderDate}
+                      date={exit ? fmt.short(exit) : null}
+                      onToggleSameDay={(same) =>
+                        updatePoint(i, {borderDate: same ? null : firstCrossingGuess(departure, draft.points[i + 1]?.arrivalDate ?? null)})
+                      }
+                      onPickDate={() => setDateTarget({kind: 'border', index: i})}
+                    />
+                  ) : null}
                   onRemove={() => removePoint(i)}
                 />
               </React.Fragment>
             );
           })}
 
-          <Pressable style={({pressed}) => [styles.addButton, pressed && styles.pressed]} onPress={addPoint} accessibilityRole="button">
-            <Ionicons name="add-circle-outline" size={20} color={theme.colors.accentText}/>
-            <Text style={styles.addButtonText}>{t('form.addSegment')}</Text>
-          </Pressable>
-        </View>
-
-        <SectionHeader title={t('form.destination')}/>
-        <Card style={styles.stack}>
-          <SelectField
-            leading={draft.destinationCode ? countryCodeToFlag(draft.destinationCode) : undefined}
-            value={draft.destinationCode ? countryName(draft.destinationCode, lang) : null}
-            placeholder={t('common.notSet')}
-            onPress={() => setCountryTarget({kind: 'destination'})}
-          />
-          <DateTimeTile
-            inline
-            label={t('form.exitDate')}
-            icon="arrow-forward-circle-outline"
-            accent="warning"
-            date={draft.exitDate ? fmt.short(draft.exitDate) : null}
-            time={draft.points[draft.points.length - 1]?.departureTime}
-            datePlaceholder={t('form.date')}
-            timePlaceholder={t('form.time')}
-            onPressDate={() => setDateTarget({kind: 'exit'})}
-            onPressTime={draft.destinationCode ? () => setTimeTarget({kind: 'departure', index: draft.points.length - 1}) : undefined}
-          />
-          {draft.destinationCode ? (
-            <DateTimeTile
-              inline
-              label={t('form.arrivalIn', {country: countryName(draft.destinationCode, lang)})}
-              icon="airplane-outline"
-              date={draft.destinationArrivalDate ? fmt.short(draft.destinationArrivalDate) : null}
-              time={draft.destinationArrivalTime}
-              datePlaceholder={draft.exitDate ? fmt.short(draft.exitDate) : t('form.date')}
-              timePlaceholder={t('form.time')}
-              onPressDate={() => setDateTarget({kind: 'destination'})}
-              onPressTime={() => setTimeTarget({kind: 'destination'})}
-            />
-          ) : null}
-          {draft.destinationCode || draft.exitDate ? (
-            <Pressable
-              onPress={() =>
-                update({destinationCode: null, exitDate: null, destinationArrivalDate: null, destinationArrivalTime: null})
-              }
-              hitSlop={6}
-              style={styles.inlineLink}
-              accessibilityRole="button"
-            >
-              <Ionicons name="close-circle-outline" size={14} color={theme.colors.accentText}/>
-              <Text style={styles.inlineLinkText}>{t('form.keepOpen')}</Text>
+          {draft.hasFinal ? null : (
+            <Pressable style={({pressed}) => [styles.addButton, pressed && styles.pressed]} onPress={addPoint} accessibilityRole="button">
+              <Ionicons name="add-circle-outline" size={20} color={theme.colors.accentText}/>
+              <Text style={styles.addButtonText}>{t('form.addSegment')}</Text>
             </Pressable>
-          ) : (
-            <Text style={styles.hint}>{t('form.destinationHint')}</Text>
           )}
-        </Card>
+        </View>
 
         {impact ? (
           <View style={styles.block}>
@@ -432,29 +438,28 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
         onSelect={selectCountry}
         onClose={() => setCountryTarget(null)}
         onClear={
-          countryTarget?.kind === 'origin' ? () => update({originCode: null, originDate: null, originTime: null})
-            : countryTarget?.kind === 'destination'
-              ? () => update({destinationCode: null, destinationArrivalDate: null, destinationArrivalTime: null})
-              : undefined
+          countryTarget?.kind === 'origin' ? () => update({originCode: null, originDate: null, originTime: null}) : undefined
         }
       />
       <DatePickerSheet
         visible={dateTarget !== null}
         title={
-          dateTarget?.kind === 'exit' ? t('form.exitDate')
+          exitTarget ? t('form.exitDate')
             : dateTarget?.kind === 'origin' ? t('form.originDeparture')
-              : t('form.arrival')
+              : dateTarget?.kind === 'departure' ? t('form.departure')
+                : dateTarget?.kind === 'border' || dateTarget?.kind === 'originBorder' ? t('form.borderDate')
+                  : t('form.arrival')
         }
-        value={dateValue}
-        minDate={dateMin}
-        maxDate={dateMax}
-        rangeStart={dateTarget?.kind === 'exit' ? lastArrival : null}
+        value={picker.value}
+        minDate={picker.min}
+        maxDate={picker.max}
+        rangeStart={exitTarget ? draft.points[lastIndex].arrivalDate : null}
         corridorLabel={
-          dateTarget?.kind === 'arrival' ? corridorLabelFor(draft.points[dateTarget.index].countryCode)
-            : dateTarget?.kind === 'exit' ? corridorLabelFor(draft.points[draft.points.length - 1].countryCode)
-              : undefined
+          dateTarget?.kind === 'arrival' || dateTarget?.kind === 'departure' || dateTarget?.kind === 'border'
+            ? corridorLabelFor(draft.points[dateTarget.index].countryCode)
+            : undefined
         }
-        impact={dateTarget?.kind === 'exit' ? exitImpact : undefined}
+        impact={exitTarget ? exitImpact : undefined}
         onConfirm={confirmDate}
         onClose={() => setDateTarget(null)}
       />

@@ -31,6 +31,8 @@ export interface PointCardProps {
   stayLabel: string | null;
   isTurnaround: boolean;
   canTurnaround: boolean;
+  isFinal: boolean;
+  canFinal: boolean;
   canRemove: boolean;
   onPickCountry: () => void;
   onPickArrivalDate: () => void;
@@ -39,6 +41,10 @@ export interface PointCardProps {
   onPickDepartureTime: () => void;
   onTransport: (mode: TransportMode | undefined) => void;
   onToggleTurnaround: (on: boolean) => void;
+  onToggleFinal: (on: boolean) => void;
+  onClearExit: () => void;
+  // Border crossing row under the departure, when it applies.
+  border?: React.ReactNode;
   onRemove: () => void;
 }
 
@@ -52,7 +58,9 @@ export function PointCard(props: PointCardProps) {
       ? t('form.mainTitle', {country: countryLabel})
       : role === 'return'
         ? `${t('journey.role.return')}: ${countryLabel}`
-        : t('form.transitTitle', {country: countryLabel})
+        : role === 'final'
+          ? t('form.finalTitle', {country: countryLabel})
+          : t('form.transitTitle', {country: countryLabel})
     : t('form.pointTitle', {n: index + 1});
   const isMain = role === 'main';
 
@@ -103,7 +111,7 @@ export function PointCard(props: PointCardProps) {
           onPressDate={props.onPickArrivalDate}
           onPressTime={props.onPickArrivalTime}
         />
-        <DateTimeTile
+        {props.isFinal ? null : <DateTimeTile
           label={isLast ? t('form.plannedExit') : t('form.departure')}
           icon={isLast ? 'calendar-outline' : 'arrow-forward-circle-outline'}
           accent="warning"
@@ -113,8 +121,17 @@ export function PointCard(props: PointCardProps) {
           timePlaceholder={t('form.time')}
           onPressDate={props.onPickDepartureDate}
           onPressTime={props.hasOutgoing || isLast ? props.onPickDepartureTime : undefined}
-        />
+        />}
       </View>
+
+      {props.border}
+
+      {isLast && !props.isFinal && props.departureDate ? (
+        <Pressable onPress={props.onClearExit} hitSlop={6} style={styles.inlineLink} accessibilityRole="button">
+          <Ionicons name="close-circle-outline" size={14} color={theme.colors.accentText}/>
+          <Text style={styles.inlineLinkText}>{t('form.keepOpen')}</Text>
+        </Pressable>
+      ) : null}
 
       {props.hasOutgoing ? (
         <View style={styles.section}>
@@ -155,6 +172,16 @@ export function PointCard(props: PointCardProps) {
             <Text style={styles.caption}>{t('form.turnaroundHint')}</Text>
           </View>
           <Toggle value={props.isTurnaround} onValueChange={props.onToggleTurnaround} accessibilityLabel={t('form.turnaround')}/>
+        </View>
+      ) : null}
+
+      {props.canFinal ? (
+        <View style={styles.turnRow}>
+          <View style={styles.countryText}>
+            <Text style={styles.turnTitle}>{t('form.finalPoint')}</Text>
+            <Text style={styles.caption}>{t('form.finalPointHint')}</Text>
+          </View>
+          <Toggle value={props.isFinal} onValueChange={props.onToggleFinal} accessibilityLabel={t('form.finalPoint')}/>
         </View>
       ) : null}
     </Card>
@@ -200,5 +227,7 @@ function createStyles({colors}: AppTheme) {
       borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderStrong,
     },
     turnTitle: {...typography.titleMd, fontSize: 14, color: colors.textPrimary},
+    inlineLink: {flexDirection: 'row', alignItems: 'center', gap: space.xs + 2, minHeight: 32},
+    inlineLinkText: {...typography.labelMd, fontSize: 13, color: colors.accentText},
   });
 }

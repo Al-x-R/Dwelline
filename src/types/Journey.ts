@@ -7,6 +7,8 @@ export interface Journey {
   originDepartureDate?: string | null;
   originDepartureTime: string | null;
   originTransportMode: string | null;
+  // Border crossing on the first leg when it isn't the departure date.
+  originBorderDate?: string | null;
   destinationCountryCode?: string | null;
   destinationCountryName: string | null;
   destinationCountryFlag: string | null;

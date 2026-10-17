@@ -6,8 +6,12 @@ export interface Trip {
   id: string;
   zoneId: ZoneId;
   countryCode: string;
+  // Counted dates: the days the border was crossed in and out.
   entryDate: string;
   exitDate: string | null;
+  // Travel dates, stored only where they differ from the counted ones (overnight legs, long border queues).
+  arrivalDate?: string;
+  departureDate?: string;
   transportMode?: TransportMode;
   arrivalTime?: string;
   departureTime?: string;

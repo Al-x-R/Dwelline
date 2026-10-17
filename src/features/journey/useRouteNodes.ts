@@ -4,7 +4,7 @@ import { countryCodeToFlag, countryName } from '../../constants/countries';
 import { useFormatters } from '../../hooks/useFormatters';
 import { useT } from '../../i18n';
 import type { TransportMode } from '../../types/Trip';
-import { pointExitDate, type JourneyDraft, type Leg } from './useJourneyDraft';
+import { mainIndex, pointDepartureDate, type JourneyDraft, type Leg } from './useJourneyDraft';
 
 export type RouteNodeKind = 'origin' | 'point' | 'destination';
 
@@ -25,7 +25,7 @@ export interface RouteNode {
   leg?: { transport?: TransportMode; minutes: number | null; isReturn: boolean };
 }
 
-// Route nodes: origin → points → destination, each with the leg to the next node.
+// Route nodes: origin → points → final point, each with the leg to the next node.
 export function useRouteNodes(draft: JourneyDraft, legs: Leg[]): RouteNode[] {
   const fmt = useFormatters();
   const {lang} = useT();
@@ -58,31 +58,31 @@ export function useRouteNodes(draft: JourneyDraft, legs: Leg[]): RouteNode[] {
         leg: legFor('origin'),
       });
     }
-    const mainIndex = draft.turnaroundIndex ?? draft.points.length - 1;
+    const main = mainIndex(draft);
     draft.points.forEach((p, i) => {
-      const exit = pointExitDate(draft, i);
+      if (draft.hasFinal && i === draft.points.length - 1) {
+        nodes.push({
+          key: p.id,
+          ...place(p.countryCode),
+          kind: 'destination',
+          isMain: false,
+          arrival: at(p.arrivalDate, p.arrivalTime),
+          day: p.arrivalDate ? fmt.dayMonth(p.arrivalDate) : undefined,
+        });
+        return;
+      }
+      const exit = pointDepartureDate(draft, i);
       nodes.push({
         key: p.id,
         ...place(p.countryCode),
         kind: 'point',
-        isMain: i === mainIndex,
+        isMain: i === main,
         arrival: at(p.arrivalDate, p.arrivalTime),
         departure: at(exit, p.departureTime),
         day: p.arrivalDate ? fmt.dayMonth(p.arrivalDate) : undefined,
         leg: legFor(p.id),
       });
     });
-    if (draft.destinationCode) {
-      const arrivalDate = draft.destinationArrivalDate ?? draft.exitDate;
-      nodes.push({
-        key: 'destination',
-        ...place(draft.destinationCode),
-        kind: 'destination',
-        isMain: false,
-        arrival: at(arrivalDate, draft.destinationArrivalTime),
-        day: arrivalDate ? fmt.dayMonth(arrivalDate) : undefined,
-      });
-    }
     return nodes;
   }, [draft, legs, fmt, lang]);
 }
