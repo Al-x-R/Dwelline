@@ -12,10 +12,10 @@ import { useZoneLabel, useZones } from '../hooks/useZones';
 import { useZoneSummary } from '../hooks/useZoneSummary';
 import { useT, type TranslationKey } from '../i18n';
 import type { RootStackParamList } from '../navigation/types';
-import { Button, Card, IconButton, Pill, Screen, type IconName } from '../components/ui';
+import { Button, Card, IconButton, Pill, Screen, type IconName, type Tone } from '../components/ui';
+import { formatPrice, PLAN_PRICES, pricePerMonth, savingsPercent, TRIAL_DAYS, type PlanId } from '../constants/pricing';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Plans'>;
-type PlanId = 'annual' | 'lifetime' | 'monthly';
 
 const FEATURES: { icon: IconName; title: TranslationKey; text: TranslationKey }[] = [
   {icon: 'sparkles-outline', title: 'plans.feature.forecast', text: 'plans.feature.forecastText'},
@@ -25,17 +25,27 @@ const FEATURES: { icon: IconName; title: TranslationKey; text: TranslationKey }[
   {icon: 'lock-closed-outline', title: 'plans.feature.privacy', text: 'plans.feature.privacyText'},
 ];
 
-const PLANS: { id: PlanId; title: TranslationKey; price: TranslationKey; sub: TranslationKey; note?: TranslationKey; badge?: TranslationKey }[] = [
-  {id: 'annual', title: 'plans.annual', price: 'plans.annualPrice', sub: 'plans.annualSub', note: 'plans.annualTrial', badge: 'plans.best'},
-  {id: 'lifetime', title: 'plans.lifetime', price: 'plans.lifetimePrice', sub: 'plans.lifetimeSub', badge: 'plans.once'},
+// sub: shown under the price; for subscriptions longer than a month it gets the monthly equivalent.
+const PLANS: {
+  id: PlanId;
+  title: TranslationKey;
+  price: TranslationKey;
+  sub: TranslationKey;
+  note?: TranslationKey;
+  badge?: { key: TranslationKey; tone: Tone };
+}[] = [
+  {id: 'annual', title: 'plans.annual', price: 'plans.annualPrice', sub: 'plans.annualSub', note: 'plans.annualTrial', badge: {key: 'plans.best', tone: 'safe'}},
+  {id: 'semiannual', title: 'plans.semiannual', price: 'plans.semiannualPrice', sub: 'plans.semiannualSub', badge: {key: 'plans.save', tone: 'warning'}},
   {id: 'monthly', title: 'plans.monthly', price: 'plans.monthlyPrice', sub: 'plans.monthlySub'},
+  {id: 'lifetime', title: 'plans.lifetime', price: 'plans.lifetimePrice', sub: 'plans.lifetimeSub', badge: {key: 'plans.launch', tone: 'warning'}},
 ];
 
 export default function PlansScreen({navigation}: Props) {
   const theme = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const fmt = useFormatters();
-  const {t} = useT();
+  const {t, lang} = useT();
+  const price = (id: PlanId) => formatPrice(PLAN_PRICES[id].price, lang);
   const {selectedZone} = useZones();
   const zoneLabel = useZoneLabel();
   const summary = useZoneSummary(selectedZone);
@@ -96,6 +106,14 @@ export default function PlansScreen({navigation}: Props) {
         <View style={styles.plans} accessibilityRole="radiogroup">
           {PLANS.map((p) => {
             const active = plan === p.id;
+            const perMonth = pricePerMonth(PLAN_PRICES[p.id]);
+            const regular = PLAN_PRICES[p.id].regularPrice;
+            const params = {
+              price: price(p.id),
+              perMonth: perMonth === null ? '' : formatPrice(perMonth, lang),
+              percent: savingsPercent(PLAN_PRICES[p.id]),
+              days: TRIAL_DAYS,
+            };
             return (
               <Pressable
                 key={p.id}
@@ -110,13 +128,19 @@ export default function PlansScreen({navigation}: Props) {
                 <View style={styles.flex}>
                   <View style={styles.planTop}>
                     <Text style={styles.planTitle}>{t(p.title)}</Text>
-                    {p.badge ? <Pill label={t(p.badge)} tone={p.id === 'annual' ? 'safe' : 'warning'} caps/> : null}
+                    {p.badge ? <Pill label={t(p.badge.key, params)} tone={p.badge.tone} caps/> : null}
                   </View>
                   <Text style={styles.planPrice}>
-                    {t(p.price)} <Text style={styles.planSub}>{p.id === 'annual' ? t(p.sub) : ''}</Text>
+                    {regular !== undefined ? (
+                      <Text style={styles.planRegular} accessibilityLabel={t('plans.regularPrice', {price: formatPrice(regular, lang)})}>
+                        {formatPrice(regular, lang)}
+                      </Text>
+                    ) : null}
+                    {regular !== undefined ? ' ' : ''}
+                    {t(p.price, params)}
                   </Text>
-                  {p.id !== 'annual' ? <Text style={styles.planSub}>{t(p.sub)}</Text> : null}
-                  {p.note ? <Text style={styles.planNote}>{t(p.note)}</Text> : null}
+                  <Text style={styles.planSub}>{t(p.sub, params)}</Text>
+                  {p.note ? <Text style={styles.planNote}>{t(p.note, params)}</Text> : null}
                 </View>
               </Pressable>
             );
@@ -125,8 +149,8 @@ export default function PlansScreen({navigation}: Props) {
       </ScrollView>
 
       <SafeAreaView edges={['bottom']} style={styles.footer}>
-        <Button label={plan === 'annual' ? t('plans.cta') : t('plans.ctaBuy')} onPress={unavailable}/>
-        {plan === 'annual' ? <Text style={styles.ctaSub}>{t('plans.ctaSub')}</Text> : null}
+        <Button label={plan === 'annual' ? t('plans.cta', {days: TRIAL_DAYS}) : t('plans.ctaBuy')} onPress={unavailable}/>
+        {plan === 'annual' ? <Text style={styles.ctaSub}>{t('plans.ctaSub', {price: price('annual')})}</Text> : null}
         <View style={styles.secure}>
           <Ionicons name="checkmark-circle-outline" size={14} color={theme.colors.safe}/>
           <Text style={styles.secureText}>{t('plans.secure')}</Text>
@@ -191,6 +215,7 @@ function createStyles({colors}: AppTheme) {
     planTop: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm, flexWrap: 'wrap'},
     planTitle: {...typography.titleMd, color: colors.textPrimary},
     planPrice: {...typography.titleMd, fontFamily: fonts.bold, color: colors.textPrimary, marginTop: space.xs, ...tabularNums},
+    planRegular: {fontFamily: fonts.regular, color: colors.textMuted, textDecorationLine: 'line-through'},
     planSub: {...typography.bodySm, fontFamily: fonts.regular, color: colors.textMuted},
     planNote: {...typography.bodySm, fontFamily: fonts.semibold, color: colors.safe, marginTop: space.xs},
     footer: {
