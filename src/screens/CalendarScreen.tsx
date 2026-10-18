@@ -21,11 +21,13 @@ import { MonthGrid } from '../components/calendar/MonthGrid';
 import { Button, Card, Pill, ProgressBar, Screen, SectionHeader, toneColors } from '../components/ui';
 import { useZoneContext } from '../hooks/useZoneContext';
 import { ZoneAccessBanner } from '../features/zone/ZoneAccessBanner';
+import { useProGate } from '../hooks/useProGate';
 
 export default function CalendarScreen() {
   const theme = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const navigation = useRootNavigation();
+  const {requirePro} = useProGate();
   const fmt = useFormatters();
   const {t, lang} = useT();
   const {selectedZone} = useZones();
@@ -181,7 +183,7 @@ export default function CalendarScreen() {
           label={t('calendar.calculateNew')}
           icon="analytics-outline"
           variant="secondary"
-          onPress={() => navigation.navigate('Simulator', {zoneId: selectedZone.id})}
+          onPress={() => requirePro(() => navigation.navigate('Simulator', {zoneId: selectedZone.id}))}
           style={styles.block}
         />
       </ScrollView>

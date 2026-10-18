@@ -14,12 +14,14 @@ import { useT } from '../i18n';
 import { LANGUAGE_NATIVE_NAMES } from '../i18n/types';
 import type { RootStackParamList } from '../navigation/types';
 import { MAX_BUFFER_DAYS, MIN_BUFFER_DAYS, useSettingsStore } from '../store/settingsStore';
+import { useIsPro } from '../store/proStore';
 import { resetAllData } from '../store/actions';
 import { shareTripsCsv } from '../services/exportService';
 import { displayDateFormat } from '../utils/format';
 import { BottomSheet, Card, ConfirmDialog, ListRow, Screen, ScreenHeader, SectionHeader, Stepper, Toggle } from '../components/ui';
 import { BackupRows } from '../components/app/BackupRows';
 import { DocumentsEditor } from '../components/app/DocumentsEditor';
+import { ProDevRow } from '../components/app/ProDevRow';
 import { ReportPdfRow } from '../components/app/ReportPdfRow';
 import { NotificationDebugRows } from '../components/app/NotificationDebugRows';
 import { ThemeOptions } from '../components/app/ThemeOptions';
@@ -36,6 +38,7 @@ export default function SettingsScreen({navigation}: Props) {
   const {selectedZone, activeZones} = useZones();
   const zoneLabel = useZoneLabel();
   const s = useSettingsStore();
+  const isPro = useIsPro();
   const {rules} = useZoneContext(selectedZone);
 
   const [themeSheet, setThemeSheet] = useState(false);
@@ -164,20 +167,33 @@ export default function SettingsScreen({navigation}: Props) {
             subtitle={t('settings.exitRemindersHint')}
             trailing={<Toggle value={s.exitReminders} onValueChange={(v) => s.setAlerts({exitReminders: v})} accessibilityLabel={t('settings.exitReminders')}/>}
           />
-          <ListRow
-            icon="document-text-outline"
-            iconTone="primary"
-            title={t('settings.documentAlerts')}
-            subtitle={t('settings.documentAlertsHint')}
-            trailing={<Toggle value={s.documentAlerts} onValueChange={(v) => s.setAlerts({documentAlerts: v})} accessibilityLabel={t('settings.documentAlerts')}/>}
-            last
-          />
+          {isPro ? (
+            <ListRow
+              icon="document-text-outline"
+              iconTone="primary"
+              title={t('settings.documentAlerts')}
+              subtitle={t('settings.documentAlertsHint')}
+              trailing={<Toggle value={s.documentAlerts} onValueChange={(v) => s.setAlerts({documentAlerts: v})} accessibilityLabel={t('settings.documentAlerts')}/>}
+              last
+            />
+          ) : (
+            <ListRow
+              icon="document-text-outline"
+              iconTone="primary"
+              title={t('settings.documentAlerts')}
+              subtitle={t('settings.documentAlertsHint')}
+              value={t('pro.badge')}
+              onPress={() => navigation.navigate('Plans')}
+              last
+            />
+          )}
         </Card>
 
         {__DEV__ ? (
           <>
             <SectionHeader title="Dev"/>
             <Card padded={false} style={styles.group}>
+              <ProDevRow/>
               <NotificationDebugRows/>
             </Card>
           </>
@@ -237,7 +253,12 @@ export default function SettingsScreen({navigation}: Props) {
 
       <BottomSheet visible={zonesSheet} title={t('settings.zones')} onClose={() => setZonesSheet(false)}>
         <ScrollView>
-          <ZoneToggleList/>
+          <ZoneToggleList
+            onUpgrade={() => {
+              setZonesSheet(false);
+              navigation.navigate('Plans');
+            }}
+          />
         </ScrollView>
       </BottomSheet>
 

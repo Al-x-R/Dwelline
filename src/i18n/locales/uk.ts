@@ -543,6 +543,8 @@ const uk: Record<TranslationKey, TranslationValue> = {
   'language.save': 'Зберегти й застосувати',
   'language.instant': 'Зміни наберуть чинності негайно',
 
+  'pro.badge': 'Pro',
+  'zoneSheet.freeLimit': 'Безкоштовно відстежується одна зона. Кілька зон одночасно — у Pro',
   'plans.eyebrow': 'Dwelline Pro',
   'plans.title': 'Преміум-доступ',
   'plans.badge': 'Pro Pass',

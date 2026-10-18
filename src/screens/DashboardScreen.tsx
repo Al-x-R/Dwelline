@@ -20,6 +20,7 @@ import {
 import { JourneyCard } from '../features/journey/JourneyCard';
 import { useJourneyList } from '../features/journey/useJourneyList';
 import { ZoneAccessBanner } from '../features/zone/ZoneAccessBanner';
+import { useProGate } from '../hooks/useProGate';
 
 const RECENT_LIMIT = 3;
 
@@ -27,6 +28,7 @@ export default function DashboardScreen() {
   const theme = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const navigation = useRootNavigation();
+  const {requirePro} = useProGate();
   const fmt = useFormatters();
   const {t, lang} = useT();
   const {selectedZone} = useZones();
@@ -139,7 +141,7 @@ export default function DashboardScreen() {
             title={t('dashboard.emptyTitle')}
             text={t('dashboard.emptyText')}
             actionLabel={t('dashboard.calculate')}
-            onAction={() => navigation.navigate('Simulator', {zoneId: selectedZone.id})}
+            onAction={() => requirePro(() => navigation.navigate('Simulator', {zoneId: selectedZone.id}))}
           />
         ) : (
           <View style={styles.list}>

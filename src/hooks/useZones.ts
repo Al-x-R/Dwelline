@@ -3,6 +3,7 @@ import { useCallback, useMemo } from 'react';
 import { BUILT_IN_ZONES, NO_ZONE, type ZoneConfig } from '../constants/zones';
 import type { StayRules } from '../core/schengenCalculator';
 import { useT, type TranslationKey } from '../i18n';
+import { FREE_ZONE_LIMIT, useIsPro } from '../store/proStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useZonesStore } from '../store/zonesStore';
 import { stayRuleLabel, zoneName, zoneRuleLabel } from '../utils/zoneLabels';
@@ -22,16 +23,20 @@ export function useZones() {
   const customZones = useZonesStore((s) => s.customZones);
   const activeZoneIds = useZonesStore((s) => s.activeZoneIds);
   const selectedZoneId = useSettingsStore((s) => s.selectedZoneId);
+  const isPro = useIsPro();
 
   return useMemo(() => {
     const allZones = [...BUILT_IN_ZONES, ...customZones];
-    const activeZones = activeZoneIds
+    const tracked = activeZoneIds
       .map((id) => allZones.find((z) => z.id === id))
       .filter((z): z is ZoneConfig => !!z);
-    const selectedZone =
-      allZones.find((z) => z.id === selectedZoneId) ?? activeZones[0] ?? BUILT_IN_ZONES[0];
+    // Without Pro only the first tracked zone shows, e.g. after a subscription lapses; the rest stay saved.
+    const activeZones = isPro ? tracked : tracked.slice(0, FREE_ZONE_LIMIT);
+    const selectedZone = isPro
+      ? allZones.find((z) => z.id === selectedZoneId) ?? activeZones[0] ?? BUILT_IN_ZONES[0]
+      : activeZones[0] ?? BUILT_IN_ZONES[0];
     return {allZones, activeZones, selectedZone};
-  }, [customZones, activeZoneIds, selectedZoneId]);
+  }, [customZones, activeZoneIds, selectedZoneId, isPro]);
 }
 
 export function useZoneLabel() {

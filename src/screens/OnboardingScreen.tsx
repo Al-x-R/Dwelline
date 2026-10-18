@@ -141,7 +141,7 @@ export default function OnboardingScreen({navigation}: Props) {
             <Text style={styles.title}>{t('onboarding.zonesTitle')}</Text>
             <Text style={styles.body}>{t('onboarding.zonesText')}</Text>
             <Card padded={false} style={styles.group}>
-              <ZoneToggleList/>
+              <ZoneToggleList onUpgrade={() => navigation.navigate('Plans')}/>
             </Card>
           </>
         ) : null}

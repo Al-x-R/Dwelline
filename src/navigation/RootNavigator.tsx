@@ -23,8 +23,12 @@ import SettingsScreen from '../screens/SettingsScreen';
 import LanguageScreen from '../screens/LanguageScreen';
 import PlansScreen from '../screens/PlansScreen';
 import AddZoneScreen from '../screens/AddZoneScreen';
+import { proOnly } from './proOnly';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
+// Defined once: wrapping inside render would remount the screen on every render.
+const ProSimulatorScreen = proOnly(SimulatorScreen);
+const ProAddZoneScreen = proOnly(AddZoneScreen);
 const Tab = createBottomTabNavigator<MainTabsParamList>();
 
 function MainTabs() {
@@ -74,14 +78,14 @@ export function RootNavigator() {
       >
         <RootStack.Screen name="Onboarding" component={OnboardingScreen} options={{gestureEnabled: false}}/>
         <RootStack.Screen name="MainTabs" component={MainTabs}/>
-        <RootStack.Screen name="Simulator" component={SimulatorScreen}/>
+        <RootStack.Screen name="Simulator" component={ProSimulatorScreen}/>
         <RootStack.Screen name="AddTrip" component={AddTripScreen} options={{presentation: 'modal'}}/>
         <RootStack.Screen name="JourneyDetail" component={JourneyDetailScreen}/>
         <RootStack.Screen name="JourneyEdit" component={JourneyEditScreen} options={{presentation: 'modal'}}/>
         <RootStack.Screen name="Settings" component={SettingsScreen}/>
         <RootStack.Screen name="Language" component={LanguageScreen}/>
         <RootStack.Screen name="Plans" component={PlansScreen} options={{presentation: 'modal'}}/>
-        <RootStack.Screen name="AddZone" component={AddZoneScreen} options={{presentation: 'modal'}}/>
+        <RootStack.Screen name="AddZone" component={ProAddZoneScreen} options={{presentation: 'modal'}}/>
       </RootStack.Navigator>
     </NavigationContainer>
   );

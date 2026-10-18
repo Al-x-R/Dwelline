@@ -8,6 +8,7 @@ import { useThemedStyles } from '../../hooks/useThemedStyles';
 import { useZoneLabel, useZones } from '../../hooks/useZones';
 import { useT } from '../../i18n';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useIsPro } from '../../store/proStore';
 import { useZonesStore } from '../../store/zonesStore';
 import { BottomSheet, Pill } from '../ui';
 
@@ -27,9 +28,13 @@ export function ZoneSelectorSheet({visible, onClose, onAddZone}: Props) {
   const activeZoneIds = useZonesStore((s) => s.activeZoneIds);
   const setActiveZoneIds = useZonesStore((s) => s.setActiveZoneIds);
 
+  const isPro = useIsPro();
+
+  // Free tier tracks one zone: picking another one switches to it.
   const select = async (zoneId: string) => {
     setSelectedZoneId(zoneId);
-    if (!activeZoneIds.includes(zoneId)) await setActiveZoneIds([...activeZoneIds, zoneId]);
+    if (!isPro) await setActiveZoneIds([zoneId]);
+    else if (!activeZoneIds.includes(zoneId)) await setActiveZoneIds([...activeZoneIds, zoneId]);
     onClose();
   };
 
@@ -72,7 +77,9 @@ export function ZoneSelectorSheet({visible, onClose, onAddZone}: Props) {
         >
           <Ionicons name="add-circle-outline" size={22} color={theme.colors.accentText}/>
           <Text style={styles.addText}>{t('zoneSheet.addCustom')}</Text>
+          {!isPro ? <Pill label={t('pro.badge')} tone="warning" caps/> : null}
         </Pressable>
+        {!isPro ? <Text style={styles.freeNote}>{t('zoneSheet.freeLimit')}</Text> : null}
       </ScrollView>
     </BottomSheet>
   );
@@ -94,6 +101,7 @@ function createStyles({colors}: AppTheme) {
       flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 56, marginTop: space.sm,
       paddingHorizontal: space.gutterSm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderStrong,
     },
-    addText: {...typography.titleMd, color: colors.accentText},
+    addText: {...typography.titleMd, flex: 1, color: colors.accentText},
+    freeNote: {...typography.bodySm, color: colors.textMuted, paddingHorizontal: space.gutterSm, paddingBottom: space.sm},
   });
 }

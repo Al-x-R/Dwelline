@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { radius, space, typography, type AppTheme } from '../../constants/theme';
 import { useAppTheme } from '../../hooks/useAppTheme';
+import { useProGate } from '../../hooks/useProGate';
 import { useThemedStyles } from '../../hooks/useThemedStyles';
 import { useZoneLabel, useZones } from '../../hooks/useZones';
 import { useT } from '../../i18n';
@@ -18,6 +19,7 @@ export function AppHeader() {
   const styles = useThemedStyles(createStyles);
   const {t} = useT();
   const navigation = useRootNavigation();
+  const {requirePro} = useProGate();
   const {selectedZone} = useZones();
   const zoneLabel = useZoneLabel();
   const [zonesOpen, setZonesOpen] = useState(false);
@@ -42,7 +44,7 @@ export function AppHeader() {
       <ZoneSelectorSheet
         visible={zonesOpen}
         onClose={() => setZonesOpen(false)}
-        onAddZone={() => navigation.navigate('AddZone')}
+        onAddZone={() => requirePro(() => navigation.navigate('AddZone'))}
       />
       <MenuSheet visible={menuOpen} onClose={() => setMenuOpen(false)}/>
     </View>

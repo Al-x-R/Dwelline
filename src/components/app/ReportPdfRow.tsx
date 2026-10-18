@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Alert } from 'react-native';
 
+import { useProGate } from '../../hooks/useProGate';
 import { useT } from '../../i18n';
 import { shareReportPdf } from '../../services/report/reportService';
 import { ListRow } from '../ui';
@@ -9,8 +10,9 @@ import { ListRow } from '../ui';
 export function ReportPdfRow({last}: { last?: boolean }) {
   const {t} = useT();
   const [busy, setBusy] = useState(false);
+  const {isPro, requirePro} = useProGate();
 
-  const onPress = async () => {
+  const share = async () => {
     if (busy) return;
     setBusy(true);
     try {
@@ -29,8 +31,8 @@ export function ReportPdfRow({last}: { last?: boolean }) {
       iconTone="primary"
       title={t('report.export')}
       subtitle={t('report.exportHint')}
-      value="PDF"
-      onPress={onPress}
+      value={isPro ? 'PDF' : t('pro.badge')}
+      onPress={() => requirePro(share)}
       last={last}
     />
   );

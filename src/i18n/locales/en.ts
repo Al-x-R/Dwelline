@@ -529,6 +529,8 @@ const en: Record<TranslationKey, TranslationValue> = {
   'language.save': 'Save and apply',
   'language.instant': 'Changes take effect immediately',
 
+  'pro.badge': 'Pro',
+  'zoneSheet.freeLimit': 'The free plan tracks one zone. Track several at once with Pro',
   'plans.eyebrow': 'Dwelline Pro',
   'plans.title': 'Premium access',
   'plans.badge': 'Pro Pass',

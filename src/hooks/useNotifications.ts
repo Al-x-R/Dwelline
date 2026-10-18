@@ -7,6 +7,7 @@ import { planNotifications } from '../services/notifications/planNotifications';
 import { configureNotifications, ensurePermission, readData, replaceScheduled } from '../services/notifications/scheduler';
 import { translate } from '../i18n';
 import { useJourneysStore } from '../store/journeysStore';
+import { useIsPro } from '../store/proStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useTripsStore } from '../store/tripsStore';
 import { useTravelDocuments } from './useZoneContext';
@@ -33,7 +34,9 @@ export function useNotifications() {
   const onboardingDone = useSettingsStore((s) => s.onboardingDone);
   const limit = useSettingsStore((s) => s.overstayAlerts);
   const exit = useSettingsStore((s) => s.exitReminders);
-  const document = useSettingsStore((s) => s.documentAlerts);
+  // Document reminders are a Pro feature; limit and exit reminders keep everyone safe and stay free.
+  const isPro = useIsPro();
+  const document = useSettingsStore((s) => s.documentAlerts) && isPro;
 
   // Runs one at a time: cancel-all and schedule must not interleave between two runs.
   const queue = useRef<Promise<void>>(Promise.resolve());

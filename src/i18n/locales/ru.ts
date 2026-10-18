@@ -538,6 +538,8 @@ const ru = {
   'language.save': 'Сохранить и применить',
   'language.instant': 'Изменения вступят в силу немедленно',
 
+  'pro.badge': 'Pro',
+  'zoneSheet.freeLimit': 'Бесплатно отслеживается одна зона. Несколько зон сразу — в Pro',
   'plans.eyebrow': 'Dwelline Pro',
   'plans.title': 'Премиум-доступ',
   'plans.badge': 'Pro Pass',
