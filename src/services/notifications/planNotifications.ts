@@ -8,6 +8,7 @@ import { translate, type Language, type TranslationKey } from '../../i18n';
 import type { Journey } from '../../types/Journey';
 import type { Trip } from '../../types/Trip';
 import { formatDate } from '../../utils/format';
+import { zoneName } from '../../utils/zoneLabels';
 
 export type NotificationKind = 'limit' | 'exit' | 'document';
 
@@ -67,10 +68,6 @@ function at(date: string): Date {
 
 function shift(date: string, days: number): string {
   return dayjs(date).add(days, 'day').format(ISO);
-}
-
-function zoneName(zone: ZoneConfig, lang: Language): string {
-  return zone.isCustom ? zone.name : translate(lang, `zone.${zone.id}` as TranslationKey);
 }
 
 function journeyOf(tripId: string, journeys: Journey[]): string | undefined {

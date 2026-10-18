@@ -13,6 +13,7 @@ export function BackupRows() {
   const [pending, setPending] = useState<BackupFile | null>(null);
   const [busy, setBusy] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
+  const [confirmUndo, setConfirmUndo] = useState(false);
 
   const refreshUndo = useCallback(() => {
     hasUndoCopy().then(setCanUndo).catch(() => setCanUndo(false));
@@ -42,11 +43,16 @@ export function BackupRows() {
   };
 
   const onUndo = async () => {
+    setBusy(true);
     try {
-      if (await undoImport()) Alert.alert(t('backup.undoneTitle'), t('backup.undoneText'));
+      const undone = await undoImport();
+      setConfirmUndo(false);
+      if (undone) Alert.alert(t('backup.undoneTitle'), t('backup.undoneText'));
     } catch (e) {
       console.error('Undo import failed', e);
+      setConfirmUndo(false);
     } finally {
+      setBusy(false);
       refreshUndo();
     }
   };
@@ -59,7 +65,7 @@ export function BackupRows() {
       setPending(null);
       setCanUndo(true);
       Alert.alert(t('backup.doneTitle'), t('backup.doneText'), [
-        {text: t('backup.undo'), style: 'destructive', onPress: onUndo},
+        {text: t('backup.undo'), style: 'destructive', onPress: () => setConfirmUndo(true)},
         {text: t('common.done'), style: 'cancel'},
       ]);
     } catch (e) {
@@ -93,7 +99,7 @@ export function BackupRows() {
           icon="arrow-undo-outline"
           title={t('settings.undoImport')}
           subtitle={t('settings.undoImportHint')}
-          onPress={onUndo}
+          onPress={() => setConfirmUndo(true)}
         />
       ) : null}
 
@@ -113,6 +119,20 @@ export function BackupRows() {
         cancelLabel={t('common.cancel')}
         onConfirm={onConfirm}
         onCancel={() => setPending(null)}
+        busy={busy}
+      />
+
+      <ConfirmDialog
+        visible={confirmUndo}
+        icon="arrow-undo-outline"
+        tone="warning"
+        title={t('backup.undoConfirmTitle')}
+        message={t('backup.undoConfirmText')}
+        confirmLabel={t('backup.undo')}
+        confirmIcon="arrow-undo-outline"
+        cancelLabel={t('backup.keep')}
+        onConfirm={onUndo}
+        onCancel={() => setConfirmUndo(false)}
         busy={busy}
       />
     </>

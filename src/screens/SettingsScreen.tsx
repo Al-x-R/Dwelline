@@ -20,6 +20,7 @@ import { displayDateFormat } from '../utils/format';
 import { BottomSheet, Card, ConfirmDialog, ListRow, Screen, ScreenHeader, SectionHeader, Stepper, Toggle } from '../components/ui';
 import { BackupRows } from '../components/app/BackupRows';
 import { DocumentsEditor } from '../components/app/DocumentsEditor';
+import { ReportPdfRow } from '../components/app/ReportPdfRow';
 import { NotificationDebugRows } from '../components/app/NotificationDebugRows';
 import { ThemeOptions } from '../components/app/ThemeOptions';
 import { ZoneToggleList } from '../components/app/ZoneToggleList';
@@ -193,6 +194,7 @@ export default function SettingsScreen({navigation}: Props) {
             value="CSV"
             onPress={() => shareTripsCsv(lang, t('settings.export'))}
           />
+          <ReportPdfRow/>
           <ListRow
             icon="trash-outline"
             title={t('settings.reset')}

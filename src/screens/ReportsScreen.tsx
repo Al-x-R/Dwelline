@@ -17,6 +17,7 @@ import { useTripsStore } from '../store/tripsStore';
 import { useJourneysStore } from '../store/journeysStore';
 import { shareTripsCsv } from '../services/exportService';
 import { AppHeader } from '../components/app/AppHeader';
+import { ReportPdfRow } from '../components/app/ReportPdfRow';
 import { FLOATING_CTA_SPACE } from '../components/app/TabBar';
 import { Card, EmptyState, ListRow, ProgressBar, Screen, SectionHeader, StatTile } from '../components/ui';
 import { ZoneStatusCard } from '../features/zone/ZoneStatusCard';
@@ -202,6 +203,7 @@ export default function ReportsScreen() {
         )}
 
         <Card padded={false} style={[styles.block, styles.group]}>
+          <ReportPdfRow/>
           <ListRow
             icon="download-outline"
             iconTone="primary"

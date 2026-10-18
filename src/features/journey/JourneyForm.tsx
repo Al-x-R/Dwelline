@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -75,6 +75,8 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
   const [timeTarget, setTimeTarget] = useState<TimeTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  // State updates land a render later; a ref blocks a second tap that arrives before that (duplicate journeys).
+  const saveStarted = useRef(false);
 
   const otherTrips = useMemo(() => {
     const exclude = new Set(excludeTripIds);
@@ -171,10 +173,19 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
       Alert.alert(t('form.invalidDateTitle'), t('form.invalidDateText'));
       return;
     }
+    if (saveStarted.current) return;
+    saveStarted.current = true;
     setSaving(true);
-    await onSave(draft, buildTrips(draft, allZones));
-    setSaving(false);
-    setSaved(true);
+    try {
+      await onSave(draft, buildTrips(draft, allZones));
+      setSaved(true);
+    } catch (e) {
+      // Nothing was saved: let the user try again.
+      saveStarted.current = false;
+      throw e;
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ── Pickers ─────────────────────────────────────────────────────────
