@@ -18,7 +18,7 @@ import { useT } from '../../i18n';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useTripsStore } from '../../store/tripsStore';
 import { formatDuration } from '../../utils/format';
-import { Button, Card, Screen, SectionHeader, SelectField, TextField, type Tone } from '../../components/ui';
+import { Button, Card, ConfirmDialog, Screen, SectionHeader, SelectField, TextField, type Tone } from '../../components/ui';
 import { CountryPickerSheet } from '../../components/app/CountryPickerSheet';
 import { DatePickerSheet, type DateImpact } from '../../components/calendar/DatePickerSheet';
 import { TimePickerSheet } from '../../components/calendar/TimePickerSheet';
@@ -36,6 +36,8 @@ import { ImpactCard, type ImpactRow } from './components/ImpactCard';
 import { TransportPicker } from './components/TransportPicker';
 import { zoneContext } from '../../core/zoneAccess';
 import { useTravelDocuments } from '../../hooks/useZoneContext';
+import { useJourneysStore } from '../../store/journeysStore';
+import { findTripOverlaps, type TripOverlap } from './tripOverlaps';
 
 type CountryTarget = { kind: 'origin' } | { kind: 'point'; index: number };
 type DateTarget =
@@ -58,6 +60,9 @@ interface Props {
   onCancel: () => void;
 }
 
+// Enough to recognise the duplicate; the rest is summed up in one line.
+const MAX_OVERLAPS_LISTED = 3;
+
 export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, onCancel}: Props) {
   const theme = useAppTheme();
   const styles = useThemedStyles(createStyles);
@@ -77,6 +82,9 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
   const [saved, setSaved] = useState(false);
   // State updates land a render later; a ref blocks a second tap that arrives before that (duplicate journeys).
   const saveStarted = useRef(false);
+  const journeys = useJourneysStore((s) => s.journeys);
+  // Saved trips the draft collides with, while the user decides whether to save anyway.
+  const [overlaps, setOverlaps] = useState<TripOverlap[]>([]);
 
   const otherTrips = useMemo(() => {
     const exclude = new Set(excludeTripIds);
@@ -167,12 +175,20 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
   const nodes = useRouteNodes(draft, legs);
 
   // ── Saving ──────────────────────────────────────────────────────────
-  const handleSave = async () => {
+  const handleSave = () => {
     if (validity === 'incomplete') return;
     if (validity === 'order') {
       Alert.alert(t('form.invalidDateTitle'), t('form.invalidDateText'));
       return;
     }
+    if (saveStarted.current) return;
+    const found = findTripOverlaps(buildTrips(draft, allZones), otherTrips, todayIso());
+    if (found.length > 0) setOverlaps(found);
+    else void save();
+  };
+
+  const save = async () => {
+    setOverlaps([]);
     if (saveStarted.current) return;
     saveStarted.current = true;
     setSaving(true);
@@ -186,6 +202,19 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
     } finally {
       setSaving(false);
     }
+  };
+
+  const overlapLine = ({existing}: TripOverlap) => {
+    const exit = existing.exitDate ? fmt.shortYear(existing.exitDate) : t('form.overlapOngoing');
+    const journey = journeys.find((j) => j.tripIds.includes(existing.id));
+    const where = `${countryCodeToFlag(existing.countryCode)} ${countryName(existing.countryCode, lang)}`;
+    return `${where}, ${fmt.shortYear(existing.entryDate)} – ${exit}${journey ? ` · «${journey.name}»` : ''}`;
+  };
+  const overlapMessage = () => {
+    const lines = overlaps.slice(0, MAX_OVERLAPS_LISTED).map(overlapLine);
+    const more = overlaps.length - MAX_OVERLAPS_LISTED;
+    if (more > 0) lines.push(t('form.overlapMore', {count: more}));
+    return t('form.overlapText', {list: lines.join('\n')});
   };
 
   // ── Pickers ─────────────────────────────────────────────────────────
@@ -479,6 +508,17 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
         value={timeValue}
         onConfirm={confirmTime}
         onClose={() => setTimeTarget(null)}
+      />
+      <ConfirmDialog
+        visible={overlaps.length > 0}
+        icon="copy-outline"
+        tone="warning"
+        title={t('form.overlapTitle')}
+        message={overlapMessage()}
+        confirmLabel={t('form.overlapConfirm')}
+        cancelLabel={t('form.overlapCancel')}
+        onConfirm={save}
+        onCancel={() => setOverlaps([])}
       />
     </Screen>
   );
