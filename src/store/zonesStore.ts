@@ -14,6 +14,8 @@ interface ZonesState {
     addCustomZone: (zone: Omit<ZoneConfig, 'isCustom' | 'isImplemented'>) => Promise<void>;
     deleteCustomZone: (id: string) => Promise<void>;
     setActiveZoneIds: (ids: string[]) => Promise<void>;
+    // Restore from a backup: replaces custom zones and the tracked list.
+    restoreZones: (customZones: ZoneConfig[], activeZoneIds: string[]) => Promise<void>;
 
     getAllZones: () => ZoneConfig[];
     getZone: (id: string) => ZoneConfig | undefined;
@@ -69,6 +71,14 @@ export const useZonesStore = create<ZonesState>((set, get) => ({
     setActiveZoneIds: async (ids) => {
         set({ activeZoneIds: ids });
         await AsyncStorage.setItem(ACTIVE_ZONES_KEY, JSON.stringify(ids));
+    },
+
+    restoreZones: async (customZones, activeZoneIds) => {
+        set({ customZones, activeZoneIds });
+        await AsyncStorage.multiSet([
+            [STORAGE_KEY, JSON.stringify(customZones)],
+            [ACTIVE_ZONES_KEY, JSON.stringify(activeZoneIds)],
+        ]);
     },
 
     getAllZones: () => {

@@ -18,6 +18,7 @@ import { resetAllData } from '../store/actions';
 import { shareTripsCsv } from '../services/exportService';
 import { displayDateFormat } from '../utils/format';
 import { BottomSheet, Card, ConfirmDialog, ListRow, Screen, ScreenHeader, SectionHeader, Stepper, Toggle } from '../components/ui';
+import { BackupRows } from '../components/app/BackupRows';
 import { DocumentsEditor } from '../components/app/DocumentsEditor';
 import { NotificationDebugRows } from '../components/app/NotificationDebugRows';
 import { ThemeOptions } from '../components/app/ThemeOptions';
@@ -183,6 +184,7 @@ export default function SettingsScreen({navigation}: Props) {
 
         <SectionHeader title={t('settings.data')}/>
         <Card padded={false} style={styles.group}>
+          <BackupRows/>
           <ListRow
             icon="download-outline"
             iconTone="primary"

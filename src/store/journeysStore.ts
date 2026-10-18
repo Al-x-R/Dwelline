@@ -13,6 +13,8 @@ interface JourneysState {
     updateJourney: (id: string, updates: Partial<Journey>) => Promise<void>;
     deleteJourney: (id: string) => Promise<void>;
     clearJourneys: () => Promise<void>;
+    // Restore from a backup: replaces every journey.
+    setAllJourneys: (journeys: Journey[]) => Promise<void>;
 
     getJourney: (id: string) => Journey | undefined;
 }
@@ -63,6 +65,11 @@ export const useJourneysStore = create<JourneysState>((set, get) => ({
     clearJourneys: async () => {
         set({ journeys: [] });
         await AsyncStorage.removeItem(STORAGE_KEY);
+    },
+
+    setAllJourneys: async (journeys) => {
+        set({ journeys });
+        await persist(journeys);
     },
 
     getJourney: (id) => {

@@ -23,6 +23,8 @@ interface TripsState {
     // Atomic replace: remove segments by id and add new ones in a single storage write.
     replaceTrips: (removeIds: string[], add: Trip[]) => Promise<void>;
     clearTrips: () => Promise<void>;
+    // Restore from a backup: replaces every trip.
+    setAllTrips: (trips: Trip[]) => Promise<void>;
 }
 
 async function persist(trips: Trip[]) {
@@ -106,5 +108,10 @@ export const useTripsStore = create<TripsState>((set, get) => ({
     clearTrips: async () => {
         set({ trips: [] });
         await AsyncStorage.removeItem(STORAGE_KEY);
+    },
+
+    setAllTrips: async (trips) => {
+        set({ trips });
+        await persist(trips);
     },
 }));
