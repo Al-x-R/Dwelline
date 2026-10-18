@@ -8,6 +8,8 @@ const CHANNEL_ID = 'reminders';
 export interface NotificationData extends Record<string, unknown> {
   kind: PlannedNotification['kind'];
   journeyId?: string;
+  // Planned fire time (ms); native triggers come back in platform-specific shapes, this one is uniform.
+  at?: number;
 }
 
 let configured = false;
@@ -59,12 +61,37 @@ export async function hasPermission(): Promise<boolean> {
 export async function replaceScheduled(plan: PlannedNotification[]): Promise<void> {
   await Notifications.cancelAllScheduledNotificationsAsync();
   for (const n of plan) {
-    const data: NotificationData = {kind: n.kind, ...(n.journeyId ? {journeyId: n.journeyId} : {})};
+    const data: NotificationData = {kind: n.kind, at: n.date.getTime(), ...(n.journeyId ? {journeyId: n.journeyId} : {})};
     await Notifications.scheduleNotificationAsync({
       content: {title: n.title, body: n.body, data},
       trigger: {type: Notifications.SchedulableTriggerInputTypes.DATE, date: n.date, channelId: CHANNEL_ID},
     });
   }
+}
+
+// Dev only: the nearest real reminder (or a sample) fires in a few seconds, so content and tap routing can be checked.
+export async function scheduleTest(seconds: number): Promise<boolean> {
+  if (!await ensurePermission()) return false;
+  const [nearest] = await listScheduled();
+  const content = nearest
+    ? {title: nearest.content.title, body: nearest.content.body, data: nearest.content.data}
+    : {title: 'Dwelline', body: 'Test notification', data: {kind: 'exit'} satisfies NotificationData};
+  await Notifications.scheduleNotificationAsync({
+    content,
+    trigger: {type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, channelId: CHANNEL_ID},
+  });
+  return true;
+}
+
+// Pending reminders, nearest first.
+export async function listScheduled(): Promise<Notifications.NotificationRequest[]> {
+  const requests = await Notifications.getAllScheduledNotificationsAsync();
+  return requests.sort((a, b) => firesAt(a) - firesAt(b));
+}
+
+export function firesAt(request: Notifications.NotificationRequest): number {
+  const at = (request.content.data as Partial<NotificationData> | undefined)?.at;
+  return typeof at === 'number' ? at : Number.MAX_SAFE_INTEGER;
 }
 
 export function readData(response: Notifications.NotificationResponse): NotificationData | null {
