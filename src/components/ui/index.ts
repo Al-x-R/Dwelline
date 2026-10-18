@@ -2,6 +2,7 @@ export { BottomSheet } from './BottomSheet';
 export { Button, type ButtonVariant } from './Button';
 export { Card, withAlpha } from './Card';
 export { ConfirmDialog } from './ConfirmDialog';
+export { DIALOG_SWITCH_DELAY_MS, showAlert, type AlertOptions, type AlertResult } from './alert';
 export { EmptyState } from './EmptyState';
 export { FieldLabel, INPUT_HEIGHT, SelectField, TextField } from './Field';
 export { FlagBadge } from './FlagBadge';

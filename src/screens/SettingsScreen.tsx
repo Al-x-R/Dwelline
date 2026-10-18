@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -18,7 +18,7 @@ import { useIsPro } from '../store/proStore';
 import { resetAllData } from '../store/actions';
 import { shareTripsCsv } from '../services/exportService';
 import { displayDateFormat } from '../utils/format';
-import { BottomSheet, Card, ConfirmDialog, ListRow, Screen, ScreenHeader, SectionHeader, Stepper, Toggle } from '../components/ui';
+import { BottomSheet, Card, ConfirmDialog, ListRow, Screen, ScreenHeader, SectionHeader, showAlert, Stepper, Toggle } from '../components/ui';
 import { BackupRows } from '../components/app/BackupRows';
 import { DocumentsEditor } from '../components/app/DocumentsEditor';
 import { ProDevRow } from '../components/app/ProDevRow';
@@ -234,7 +234,7 @@ export default function SettingsScreen({navigation}: Props) {
             icon="lock-closed-outline"
             title={t('settings.privacy')}
             subtitle={t('settings.privacyHint')}
-            onPress={() => Alert.alert(t('settings.privacyTitle'), t('settings.privacyText'))}
+            onPress={() => showAlert({icon: 'lock-closed-outline', tone: 'safe', title: t('settings.privacyTitle'), message: t('settings.privacyText')})}
           />
           <ListRow
             icon="code-slash-outline"

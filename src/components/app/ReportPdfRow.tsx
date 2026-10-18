@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { Alert } from 'react-native';
 
 import { useProGate } from '../../hooks/useProGate';
 import { useT } from '../../i18n';
 import { shareReportPdf } from '../../services/report/reportService';
-import { ListRow } from '../ui';
+import { ListRow, showAlert } from '../ui';
 
 // PDF stay report row, shared by Reports and Settings.
 export function ReportPdfRow({last}: { last?: boolean }) {
@@ -19,7 +18,7 @@ export function ReportPdfRow({last}: { last?: boolean }) {
       await shareReportPdf(t('report.export'));
     } catch (e) {
       console.error('PDF report failed', e);
-      Alert.alert(t('report.failed'), String(e));
+      void showAlert({icon: 'document-text-outline', tone: 'warning', title: t('report.failed'), message: String(e)});
     } finally {
       setBusy(false);
     }

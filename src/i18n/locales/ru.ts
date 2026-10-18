@@ -3,6 +3,7 @@ import type { TranslationValue } from '../types';
 const ru = {
   'common.back': 'Назад',
   'common.close': 'Закрыть',
+  'common.ok': 'Понятно',
   'common.cancel': 'Отмена',
   'common.done': 'Готово',
   'common.save': 'Сохранить',

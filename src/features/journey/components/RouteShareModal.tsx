@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,7 +8,7 @@ import * as Sharing from 'expo-sharing';
 
 import { POSTER, space, fonts } from '../../../constants/theme';
 import { useT } from '../../../i18n';
-import type { IconName } from '../../../components/ui';
+import { ConfirmDialog, type IconName } from '../../../components/ui';
 import type { Leg } from '../useJourneyDraft';
 import type { RouteNode } from '../useRouteNodes';
 import { RoutePoster, type PosterStatus } from './RoutePoster';
@@ -30,6 +30,7 @@ export function RouteShareModal({visible, title, subtitle, badge, status, nodes,
   const posterRef = useRef<View>(null);
   const [busy, setBusy] = useState(false);
   const [capturing, setCapturing] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const share = async () => {
     if (busy) return;
@@ -47,7 +48,7 @@ export function RouteShareModal({visible, title, subtitle, badge, status, nodes,
         await Share.share({url: uri, message: title});
       }
     } catch {
-      Alert.alert(t('route.shareFailed'));
+      setFailed(true);
     } finally {
       setCapturing(false);
       setBusy(false);
@@ -81,6 +82,16 @@ export function RouteShareModal({visible, title, subtitle, badge, status, nodes,
           <SafeAreaView edges={['bottom']} style={styles.bottom}/>
         </SafeAreaView>
       </SafeAreaProvider>
+      {/* Inside this Modal on purpose: a dialog from the screen below wouldn't show over a full-screen modal on iOS. */}
+      <ConfirmDialog
+        visible={failed}
+        icon="image-outline"
+        tone="warning"
+        title={t('route.shareFailed')}
+        confirmLabel={t('common.ok')}
+        onConfirm={() => setFailed(false)}
+        onCancel={() => setFailed(false)}
+      />
     </Modal>
   );
 }

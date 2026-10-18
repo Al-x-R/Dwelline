@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert } from 'react-native';
 
 import { useT } from '../../i18n';
 import type { BackupFile } from '../../services/backup/backupFormat';
 import { exportBackup, hasUndoCopy, pickBackup, restoreBackup, undoImport } from '../../services/backup/backupService';
 import { formatDate } from '../../utils/format';
-import { ConfirmDialog, ListRow } from '../ui';
+import { ConfirmDialog, DIALOG_SWITCH_DELAY_MS, ListRow, showAlert } from '../ui';
 
 // Settings rows for the JSON backup: export, restore (replaces everything, after a confirmation) and undo.
 export function BackupRows() {
@@ -26,7 +25,7 @@ export function BackupRows() {
       await exportBackup(t('settings.backup'));
     } catch (e) {
       console.error('Backup export failed', e);
-      Alert.alert(t('backup.exportFailed'), String(e));
+      void showAlert({icon: 'cloud-upload-outline', tone: 'warning', title: t('backup.exportFailed'), message: String(e)});
     }
   };
 
@@ -35,10 +34,10 @@ export function BackupRows() {
       const result = await pickBackup();
       if (!result) return;
       if (result.ok) setPending(result.backup);
-      else Alert.alert(t('backup.errorTitle'), t(`backup.error.${result.error}`));
+      else void showAlert({icon: 'document-outline', tone: 'warning', title: t('backup.errorTitle'), message: t(`backup.error.${result.error}`)});
     } catch (e) {
       console.error('Backup read failed', e);
-      Alert.alert(t('backup.errorTitle'), t('backup.error.not_json'));
+      void showAlert({icon: 'document-outline', tone: 'warning', title: t('backup.errorTitle'), message: t('backup.error.not_json')});
     }
   };
 
@@ -47,7 +46,7 @@ export function BackupRows() {
     try {
       const undone = await undoImport();
       setConfirmUndo(false);
-      if (undone) Alert.alert(t('backup.undoneTitle'), t('backup.undoneText'));
+      if (undone) void showAlert({icon: 'arrow-undo-outline', tone: 'safe', title: t('backup.undoneTitle'), message: t('backup.undoneText')});
     } catch (e) {
       console.error('Undo import failed', e);
       setConfirmUndo(false);
@@ -62,19 +61,25 @@ export function BackupRows() {
     setBusy(true);
     try {
       await restoreBackup(pending);
-      setPending(null);
       setCanUndo(true);
-      Alert.alert(t('backup.doneTitle'), t('backup.doneText'), [
-        {text: t('backup.undo'), style: 'destructive', onPress: () => setConfirmUndo(true)},
-        {text: t('common.done'), style: 'cancel'},
-      ]);
     } catch (e) {
       console.error('Backup restore failed', e);
-      setPending(null);
-      Alert.alert(t('backup.errorTitle'), String(e));
+      void showAlert({icon: 'cloud-download-outline', tone: 'warning', title: t('backup.errorTitle'), message: String(e)});
+      return;
     } finally {
+      setPending(null);
       setBusy(false);
     }
+    const choice = await showAlert({
+      icon: 'checkmark-circle-outline',
+      tone: 'safe',
+      title: t('backup.doneTitle'),
+      message: t('backup.doneText'),
+      confirmLabel: t('common.done'),
+      cancelLabel: t('backup.undo'),
+    });
+    // Wait for the notice to close before opening the confirmation over it.
+    if (choice === 'cancel') setTimeout(() => setConfirmUndo(true), DIALOG_SWITCH_DELAY_MS);
   };
 
   return (

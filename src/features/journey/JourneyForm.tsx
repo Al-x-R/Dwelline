@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import dayjs from 'dayjs';
@@ -18,7 +18,7 @@ import { useT } from '../../i18n';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useTripsStore } from '../../store/tripsStore';
 import { formatDuration } from '../../utils/format';
-import { Button, Card, ConfirmDialog, Screen, SectionHeader, SelectField, TextField, type Tone } from '../../components/ui';
+import { Button, Card, ConfirmDialog, Screen, SectionHeader, SelectField, showAlert, TextField, type Tone } from '../../components/ui';
 import { CountryPickerSheet } from '../../components/app/CountryPickerSheet';
 import { DatePickerSheet, type DateImpact } from '../../components/calendar/DatePickerSheet';
 import { TimePickerSheet } from '../../components/calendar/TimePickerSheet';
@@ -178,7 +178,7 @@ export function JourneyForm({mode, initialDraft, excludeTripIds = [], onSave, on
   const handleSave = () => {
     if (validity === 'incomplete') return;
     if (validity === 'order') {
-      Alert.alert(t('form.invalidDateTitle'), t('form.invalidDateText'));
+      void showAlert({icon: 'calendar-outline', tone: 'warning', title: t('form.invalidDateTitle'), message: t('form.invalidDateText')});
       return;
     }
     if (saveStarted.current) return;

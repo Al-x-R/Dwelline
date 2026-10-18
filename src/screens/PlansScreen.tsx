@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -12,7 +12,7 @@ import { useZoneLabel, useZones } from '../hooks/useZones';
 import { useZoneSummary } from '../hooks/useZoneSummary';
 import { useT, type TranslationKey } from '../i18n';
 import type { RootStackParamList } from '../navigation/types';
-import { Button, Card, IconButton, Pill, Screen, type IconName, type Tone } from '../components/ui';
+import { Button, Card, IconButton, Pill, Screen, showAlert, type IconName, type Tone } from '../components/ui';
 import { formatPrice, PLAN_PRICES, pricePerMonth, savingsPercent, TRIAL_DAYS, type PlanId } from '../constants/pricing';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Plans'>;
@@ -51,7 +51,9 @@ export default function PlansScreen({navigation}: Props) {
   const summary = useZoneSummary(selectedZone);
   const [plan, setPlan] = useState<PlanId>('annual');
 
-  const unavailable = () => Alert.alert(t('plans.unavailableTitle'), t('plans.unavailableText'));
+  const unavailable = () => {
+    void showAlert({icon: 'time-outline', title: t('plans.unavailableTitle'), message: t('plans.unavailableText')});
+  };
 
   return (
     <Screen edges={['top', 'left', 'right']}>

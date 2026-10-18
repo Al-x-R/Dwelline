@@ -4,6 +4,7 @@ import type { TranslationKey } from './ru';
 const en: Record<TranslationKey, TranslationValue> = {
   'common.back': 'Back',
   'common.close': 'Close',
+  'common.ok': 'OK',
   'common.cancel': 'Cancel',
   'common.done': 'Done',
   'common.save': 'Save',

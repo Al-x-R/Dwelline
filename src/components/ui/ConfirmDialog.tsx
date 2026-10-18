@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { radius, space, typography, type AppTheme } from '../../constants/theme';
@@ -14,35 +14,43 @@ interface Props {
   icon: IconName;
   tone?: Tone;
   title: string;
-  message: string;
+  message?: string;
   // "Limit impact" block between the text and the buttons.
   highlight?: { icon: IconName; title: string; text: React.ReactNode };
   footnote?: string;
   confirmLabel: string;
   confirmIcon?: IconName;
-  cancelLabel: string;
+  // Without it the dialog has a single button (a notice).
+  cancelLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  // Backdrop tap and the Android back button; defaults to onCancel.
+  onDismiss?: () => void;
   busy?: boolean;
 }
 
 export function ConfirmDialog({
   visible, icon, tone = 'danger', title, message, highlight, footnote,
-  confirmLabel, confirmIcon, cancelLabel, onConfirm, onCancel, busy,
+  confirmLabel, confirmIcon, cancelLabel, onConfirm, onCancel, onDismiss = onCancel, busy,
 }: Props) {
   const theme = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const {fg, bg} = toneColors(theme.colors, tone);
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss} statusBarTranslucent>
       <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} accessibilityLabel={cancelLabel}/>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} accessibilityLabel={cancelLabel ?? confirmLabel}/>
         <View style={styles.dialog} accessibilityViewIsModal>
           <View style={[styles.iconBox, {backgroundColor: tone === 'danger' ? theme.colors.dangerStrong : bg}]}>
             <Ionicons name={icon} size={28} color={tone === 'danger' ? theme.colors.onDanger : fg}/>
           </View>
           <Text style={styles.title}>{title}</Text>
-          <Text style={styles.message}>{message}</Text>
+          {message ? (
+            // Long texts (lists, error details) scroll inside the dialog instead of pushing the buttons off screen.
+            <ScrollView style={styles.messageScroll} contentContainerStyle={styles.messageContent} bounces={false}>
+              <Text style={styles.message}>{message}</Text>
+            </ScrollView>
+          ) : null}
 
           {highlight ? (
             <View style={styles.highlight}>
@@ -66,7 +74,7 @@ export function ConfirmDialog({
               onPress={onConfirm}
               busy={busy}
             />
-            <Button label={cancelLabel} variant="secondary" onPress={onCancel}/>
+            {cancelLabel ? <Button label={cancelLabel} variant="secondary" onPress={onCancel}/> : null}
           </View>
         </View>
       </View>
@@ -83,7 +91,9 @@ function createStyles({colors, elevation}: AppTheme) {
     },
     iconBox: {width: 64, height: 64, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center'},
     title: {...typography.headlineLg, color: colors.textPrimary, textAlign: 'center', marginTop: space.md},
-    message: {...typography.bodyMd, color: colors.textBody, textAlign: 'center', marginTop: space.sm},
+    messageScroll: {alignSelf: 'stretch', flexGrow: 0, maxHeight: 320, marginTop: space.sm},
+    messageContent: {flexGrow: 0},
+    message: {...typography.bodyMd, color: colors.textBody, textAlign: 'center'},
     highlight: {
       flexDirection: 'row', gap: space.gutterSm, alignSelf: 'stretch', marginTop: space.md,
       padding: space.gutterSm, borderRadius: radius.md, backgroundColor: colors.surfaceElevated,

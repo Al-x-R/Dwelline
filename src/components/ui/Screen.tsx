@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { layout } from '../../constants/theme';
 import { useAppTheme } from '../../hooks/useAppTheme';
+import { AlertHost } from './AlertHost';
 
 interface Props {
   children: React.ReactNode;
@@ -24,6 +25,7 @@ export function Screen({children, edges = ['top'], style}: Props) {
         <LinearGradient colors={theme.gradients.ambient} locations={layout.ambientStops} style={StyleSheet.absoluteFill}/>
       </View>
       {children}
+      <AlertHost/>
     </SafeAreaView>
   );
 }

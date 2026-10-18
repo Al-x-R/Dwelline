@@ -1,8 +1,7 @@
 import React from 'react';
-import { Alert } from 'react-native';
 
 import { firesAt, listScheduled, scheduleTest } from '../../services/notifications/scheduler';
-import { ListRow } from '../ui';
+import { ListRow, showAlert } from '../ui';
 
 const TEST_DELAY_SECONDS = 5;
 const MAX_LISTED = 15;
@@ -14,9 +13,9 @@ function formatFireTime(ms: number): string {
 async function sendTest() {
   try {
     const ok = await scheduleTest(TEST_DELAY_SECONDS);
-    if (!ok) Alert.alert('Нет разрешения', 'Разрешите уведомления в системных настройках.');
+    if (!ok) void showAlert({icon: 'notifications-off-outline', tone: 'warning', title: 'Нет разрешения', message: 'Разрешите уведомления в системных настройках.'});
   } catch (e) {
-    Alert.alert('Ошибка', String(e));
+    void showAlert({tone: 'warning', title: 'Ошибка', message: String(e)});
   }
 }
 
@@ -27,9 +26,9 @@ async function showScheduled() {
       .slice(0, MAX_LISTED)
       .map((r) => `${formatFireTime(firesAt(r))}\n${r.content.title ?? ''}`);
     const more = requests.length > MAX_LISTED ? `\n\n…и ещё ${requests.length - MAX_LISTED}` : '';
-    Alert.alert(`Запланировано: ${requests.length}`, lines.join('\n\n') + more || 'Пусто');
+    void showAlert({icon: 'list-outline', title: `Запланировано: ${requests.length}`, message: lines.join('\n\n') + more || 'Пусто'});
   } catch (e) {
-    Alert.alert('Ошибка', String(e));
+    void showAlert({tone: 'warning', title: 'Ошибка', message: String(e)});
   }
 }
 
